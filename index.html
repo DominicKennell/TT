@@ -1,0 +1,2186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> DK Timetable</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1, h2, h3 {
+            color: #2c3e50;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 1.8em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+
+        .btn-secondary:hover {
+            background: #bdc3c7;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e8449;
+        }
+
+        .btn-large {
+            padding: 16px 32px;
+            font-size: 18px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 16px 0;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #34495e;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 16px 0;
+            border-radius: 8px;
+            border: 1px solid #ecf0f1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        th {
+            background: #34495e;
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        tr.selected {
+            background: #ebf5fb;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .summary-box h3 {
+            margin-bottom: 12px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px dashed #bdc3c7;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .schedule-output {
+            background: #1e272e;
+            color: #7bed9f;
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #7f8c8d;
+        }
+
+        .modal-close:hover {
+            color: #e74c3c;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: #ecf0f1;
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #7f8c8d;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .list-box {
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .list-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid #ecf0f1;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list-item:hover {
+            background: #f8f9fa;
+        }
+
+        .list-item.selected {
+            background: #ebf5fb;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-primary {
+            background: #667eea20;
+            color: #667eea;
+        }
+
+        .badge-success {
+            background: #27ae6020;
+            color: #27ae60;
+        }
+
+        .badge-warning {
+            background: #f39c1220;
+            color: #f39c12;
+        }
+
+        .badge-danger {
+            background: #e74c3c20;
+            color: #e74c3c;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .requirements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .requirement-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .requirement-item input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .requirement-item input[type="number"] {
+            width: 60px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .schedule-day {
+            margin-bottom: 24px;
+        }
+
+        .schedule-day h3 {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 0;
+        }
+
+        .schedule-day table {
+            border: 1px solid #ddd;
+            border-top: none;
+        }
+
+        .verification-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+        }
+
+        .verification-item.success {
+            color: #27ae60;
+        }
+
+        .verification-item.error {
+            color: #e74c3c;
+        }
+
+        .info-text {
+            color: #7f8c8d;
+            font-size: 13px;
+            font-style: italic;
+            margin-top: 8px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .group-config-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr 40px;
+            gap: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea10, #764ba210);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 4px;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel -->
+        <div class="panel">
+            <h1>👨‍🏫 Teacher Management</h1>
+            
+            <button class="btn btn-primary btn-large" onclick="openConstraintsModal()">
+                ⚙️ CONFIGURE CONSTRAINTS
+            </button>
+            <p class="info-text" style="text-align: center;">(Configure subjects, groups, days, time slots, rooms)</p>
+
+            <div style="margin-top: 24px;">
+                <h2>📋 Teachers</h2>
+                <div class="btn-group">
+                    <button class="btn btn-success" onclick="openTeacherModal()">➕ Add Teacher</button>
+                    <button class="btn btn-secondary" onclick="editSelectedTeacher()">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="removeSelectedTeacher()">🗑️ Remove</button>
+                </div>
+
+                <div class="table-container">
+                    <table id="teacherTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Hours</th>
+                                <th>Faculty</th>
+                                <th>Courses</th>
+                                <th>Days</th>
+                                <th>Subjects</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teacherTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTeachers">0</div>
+                        <div class="stat-label">Teachers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalHours">0</div>
+                        <div class="stat-label">Total Hours</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="requiredHours">0</div>
+                        <div class="stat-label">Required Hours</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary-box">
+                <h3>📊 Current Constraints</h3>
+                <div id="constraintsSummary"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="panel">
+            <h1>🎯 Schedule Generation</h1>
+            <p class="info-text" style="text-align: center; margin-bottom: 20px;">
+                Click 'CONFIGURE CONSTRAINTS' to set up subjects, groups, days & rooms, then add teachers
+            </p>
+
+            <button class="btn btn-primary btn-large" id="generateBtn" onclick="generateSchedule()" disabled>
+                🎯 GENERATE PERFECT SCHEDULE
+            </button>
+
+            <div class="btn-group" style="justify-content: center; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="exportToPDF()">📄 Export to PDF</button>
+                <button class="btn btn-danger" onclick="clearSchedule()">🗑️ Clear Schedule</button>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <h2>📅 Generated Schedule</h2>
+                <div class="schedule-output" id="scheduleOutput">
+                    Click "GENERATE PERFECT SCHEDULE" to create your schedule...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Constraints Modal -->
+    <div class="modal-overlay" id="constraintsModal">
+        <div class="modal" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h2>⚙️ Configure Schedule Constraints</h2>
+                <button class="modal-close" onclick="closeConstraintsModal()">×</button>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('subjects')">📚 Subjects</button>
+                <button class="tab" onclick="switchTab('faculty')">🎓 Faculty</button>
+                <button class="tab" onclick="switchTab('courses')">📖 Courses</button>
+                <button class="tab" onclick="switchTab('groups')">👥 Groups</button>
+                <button class="tab" onclick="switchTab('schedule')">📅 Days & Times</button>
+                <button class="tab" onclick="switchTab('rooms')">🏫 Rooms</button>
+                <button class="tab" onclick="switchTab('dayoff')">🌴 Day-Off</button>
+            </div>
+
+            <!-- Subjects Tab -->
+            <div class="tab-content active" id="tab-subjects">
+                <h3>📚 Subject Requirements</h3>
+                <p class="info-text">Define how many sessions of each subject are required per class</p>
+                
+                <div id="requirementsList" class="requirements-grid"></div>
+                
+                <button class="btn btn-success" onclick="addRequirement()" style="margin-top: 16px;">
+                    ➕ Add Subject
+                </button>
+            </div>
+
+            <!-- Faculty Tab -->
+            <div class="tab-content" id="tab-faculty">
+                <h3>🎓 Faculty/Departments</h3>
+                <p class="info-text">Define your faculty/departments (e.g., Performing Arts, Art, Media, DCC, Music)</p>
+                
+                <div class="list-box" id="facultyList"></div>
+                
+                <div class="btn-group" style="margin-top: 16px;">
+                    <button class="btn btn-success" onclick="addFaculty()">➕ Add Faculty</button>
+                    <button class="btn btn-secondary" onclick="editFaculty()">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="removeFaculty()">🗑️ Remove</button>
+                </div>
+            </div>
+
+            <!-- Courses Tab -->
+            <div class="tab-content" id="tab-courses">
+                <h3>📖 Courses/Levels</h3>
+                <p class="info-text">Define your courses/levels (e.g., Level 1, Level 2, Level 3)</p>
+                
+                <div class="list-box" id="coursesList"></div>
+                
+                <div class="btn-group" style="margin-top: 16px;">
+                    <button class="btn btn-success" onclick="addCourse()">➕ Add Course</button>
+                    <button class="btn btn-secondary" onclick="editCourse()">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="removeCourse()">🗑️ Remove</button>
+                </div>
+            </div>
+
+            <!-- Groups Tab -->
+            <div class="tab-content" id="tab-groups">
+                <h3>👥 Student Groups</h3>
+                <p class="info-text">Configure each student group with their faculty and work placement settings</p>
+                
+                <div style="background: #e8f4fd; border-radius: 8px; padding: 12px; margin-bottom: 16px; border-left: 4px solid #3498db;">
+                    <strong>💼 T-Level Work Placement (Industry Placement Day):</strong> 
+                    <div style="color: #555; margin-top: 6px; font-size: 13px;">
+                        • Enable for groups with industry placement days<br>
+                        • <strong>Counts as a FULL DAY</strong> of sessions toward their hours<br>
+                        • They will also need a <strong>separate day off</strong> configured in the Day-Off tab<br>
+                        • Example: T3A has Work Placement on Friday + Day Off on Monday = only in college Tue-Thu
+                    </div>
+                </div>
+                
+                <div id="groupsContainer"></div>
+                
+                <button class="btn btn-success" onclick="addGroup()" style="margin-top: 16px;">
+                    ➕ Add Student Group
+                </button>
+            </div>
+
+            <!-- Schedule Tab -->
+            <div class="tab-content" id="tab-schedule">
+                <div class="grid-2">
+                    <div>
+                        <h3>📅 School Days</h3>
+                        <div class="checkbox-group" id="daysCheckboxes"></div>
+                    </div>
+                    <div>
+                        <h3>⏰ Time Slots</h3>
+                        <div class="list-box" id="timeslotsList"></div>
+                        <div class="btn-group" style="margin-top: 12px;">
+                            <button class="btn btn-success" onclick="addTimeslot()">➕ Add</button>
+                            <button class="btn btn-secondary" onclick="editTimeslot()">✏️ Edit</button>
+                            <button class="btn btn-danger" onclick="removeTimeslot()">🗑️ Remove</button>
+                        </div>
+                        <p class="info-text">Format: HH:MM-HH:MM (e.g., 09:00-10:00)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rooms Tab -->
+            <div class="tab-content" id="tab-rooms">
+                <h3>🏫 Classrooms</h3>
+                <p class="info-text">Define available classrooms</p>
+                
+                <div class="list-box" id="roomsList"></div>
+                
+                <div class="btn-group" style="margin-top: 16px;">
+                    <button class="btn btn-success" onclick="addRoom()">➕ Add Classroom</button>
+                    <button class="btn btn-secondary" onclick="editRoom()">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="removeRoom()">🗑️ Remove</button>
+                </div>
+            </div>
+
+            <!-- Day-Off Tab -->
+            <div class="tab-content" id="tab-dayoff">
+                <h3>🌴 Group Day-Off Scheduling</h3>
+                <p class="info-text">Assign which days each group has off (can select multiple days). Groups are identified by the last character of the student group name.</p>
+                
+                <div id="dayoffContainer"></div>
+            </div>
+
+            <div class="btn-group" style="justify-content: center; margin-top: 24px; padding-top: 20px; border-top: 2px solid #ecf0f1;">
+                <button class="btn btn-primary btn-large" onclick="saveConstraints()" style="max-width: 400px;">
+                    💾 SAVE & APPLY CONFIGURATION
+                </button>
+                <button class="btn btn-secondary" onclick="resetConstraints()">↺ Reset Defaults</button>
+                <button class="btn btn-secondary" onclick="closeConstraintsModal()">✗ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Modal -->
+    <div class="modal-overlay" id="teacherModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 id="teacherModalTitle">➕ Add Teacher</h2>
+                <button class="modal-close" onclick="closeTeacherModal()">×</button>
+            </div>
+
+            <div class="form-group">
+                <label>Teacher Name</label>
+                <input type="text" class="form-control" id="teacherName" placeholder="Enter teacher name">
+            </div>
+
+            <div class="form-group">
+                <label>Maximum Hours per Week</label>
+                <input type="number" class="form-control" id="teacherHours" value="20" min="1" max="50">
+            </div>
+
+            <div class="form-group">
+                <label>Faculty/Department</label>
+                <select class="form-control" id="teacherFaculty"></select>
+            </div>
+
+            <div class="form-group">
+                <label>Courses/Levels Can Teach</label>
+                <div class="checkbox-group" id="teacherCourses"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Available Days</label>
+                <div class="checkbox-group" id="teacherDays"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Subjects Can Teach</label>
+                <div class="checkbox-group" id="teacherSubjects"></div>
+            </div>
+
+            <div class="btn-group" style="justify-content: center; margin-top: 24px;">
+                <button class="btn btn-primary" onclick="saveTeacher()">✓ Save</button>
+                <button class="btn btn-secondary" onclick="closeTeacherModal()">✗ Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== STATE ====================
+        let constraints = {
+            requirements: { "Maths": 4, "English": 4, "VOC": 4, "PBL": 4, "Tutorial": 1 },
+            faculty: ["Performing Arts", "Art", "Media", "DCC", "Music"],
+            courses: ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5"],
+            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            timeSlots: ["09:00-10:00", "10:10-11:10", "11:30-12:30", "13:30-14:30", "14:40-15:40", "15:50-16:50"],
+            classes: ["L1A", "L2A", "L2B", "L2C", "L3A", "L3B", "L3C"],
+            groupConfigs: {},
+            rooms: ["Room A101", "Room A102", "Room A103", "Room B201", "Room B202", "Room B203", "Room C301", "Room C302", "Room D401", "Room D402"],
+            groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] }
+        };
+
+        let teachers = [];
+        let schedule = [];
+        let selectedTeacherIndex = -1;
+        let editingTeacherIndex = -1;
+
+        // Temporary state for modal editing
+        let tempConstraints = {};
+
+        // ==================== INITIALIZATION ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            updateConstraintsSummary();
+            updateTeacherTable();
+            updateStats();
+        });
+
+        // ==================== CONSTRAINTS MODAL ====================
+        function openConstraintsModal() {
+            tempConstraints = JSON.parse(JSON.stringify(constraints));
+            renderConstraintsModal();
+            document.getElementById('constraintsModal').classList.add('active');
+        }
+
+        function closeConstraintsModal() {
+            document.getElementById('constraintsModal').classList.remove('active');
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        function renderConstraintsModal() {
+            renderRequirements();
+            renderFacultyList();
+            renderCoursesList();
+            renderGroupsContainer();
+            renderDaysCheckboxes();
+            renderTimeslotsList();
+            renderRoomsList();
+            renderDayoffContainer();
+        }
+
+        function renderRequirements() {
+            const container = document.getElementById('requirementsList');
+            container.innerHTML = '';
+            
+            Object.entries(tempConstraints.requirements).forEach(([subject, count], index) => {
+                container.innerHTML += `
+                    <div class="requirement-item" data-index="${index}">
+                        <input type="text" value="${subject}" onchange="updateRequirement(${index}, 'subject', this.value)">
+                        <input type="number" value="${count}" min="0" max="10" onchange="updateRequirement(${index}, 'count', this.value)">
+                        <button class="btn btn-danger" onclick="removeRequirement('${subject}')" style="padding: 8px;">🗑️</button>
+                    </div>
+                `;
+            });
+        }
+
+        function updateRequirement(index, field, value) {
+            const keys = Object.keys(tempConstraints.requirements);
+            const oldKey = keys[index];
+            
+            if (field === 'subject') {
+                const count = tempConstraints.requirements[oldKey];
+                delete tempConstraints.requirements[oldKey];
+                tempConstraints.requirements[value] = count;
+            } else {
+                tempConstraints.requirements[oldKey] = parseInt(value) || 0;
+            }
+        }
+
+        function addRequirement() {
+            const subject = prompt('Enter subject name:');
+            if (subject && subject.trim()) {
+                tempConstraints.requirements[subject.trim()] = 1;
+                renderRequirements();
+            }
+        }
+
+        function removeRequirement(subject) {
+            delete tempConstraints.requirements[subject];
+            renderRequirements();
+        }
+
+        function renderFacultyList() {
+            const container = document.getElementById('facultyList');
+            container.innerHTML = tempConstraints.faculty.map((f, i) => `
+                <div class="list-item ${i === selectedFacultyIndex ? 'selected' : ''}" onclick="selectFaculty(${i})">
+                    ${f}
+                </div>
+            `).join('');
+        }
+
+        let selectedFacultyIndex = -1;
+        function selectFaculty(index) {
+            selectedFacultyIndex = index;
+            renderFacultyList();
+        }
+
+        function addFaculty() {
+            const faculty = prompt('Enter faculty/department name:');
+            if (faculty && faculty.trim()) {
+                tempConstraints.faculty.push(faculty.trim());
+                renderFacultyList();
+            }
+        }
+
+        function editFaculty() {
+            if (selectedFacultyIndex < 0) {
+                alert('Please select a faculty to edit!');
+                return;
+            }
+            const newName = prompt('Edit faculty name:', tempConstraints.faculty[selectedFacultyIndex]);
+            if (newName && newName.trim()) {
+                tempConstraints.faculty[selectedFacultyIndex] = newName.trim();
+                renderFacultyList();
+            }
+        }
+
+        function removeFaculty() {
+            if (selectedFacultyIndex < 0) {
+                alert('Please select a faculty to remove!');
+                return;
+            }
+            tempConstraints.faculty.splice(selectedFacultyIndex, 1);
+            selectedFacultyIndex = -1;
+            renderFacultyList();
+        }
+
+        let selectedCourseIndex = -1;
+        function renderCoursesList() {
+            const container = document.getElementById('coursesList');
+            container.innerHTML = tempConstraints.courses.map((c, i) => `
+                <div class="list-item ${i === selectedCourseIndex ? 'selected' : ''}" onclick="selectCourse(${i})">
+                    ${c}
+                </div>
+            `).join('');
+        }
+
+        function selectCourse(index) {
+            selectedCourseIndex = index;
+            renderCoursesList();
+        }
+
+        function addCourse() {
+            const course = prompt('Enter course/level name:');
+            if (course && course.trim()) {
+                tempConstraints.courses.push(course.trim());
+                renderCoursesList();
+            }
+        }
+
+        function editCourse() {
+            if (selectedCourseIndex < 0) {
+                alert('Please select a course to edit!');
+                return;
+            }
+            const newName = prompt('Edit course name:', tempConstraints.courses[selectedCourseIndex]);
+            if (newName && newName.trim()) {
+                tempConstraints.courses[selectedCourseIndex] = newName.trim();
+                renderCoursesList();
+            }
+        }
+
+        function removeCourse() {
+            if (selectedCourseIndex < 0) {
+                alert('Please select a course to remove!');
+                return;
+            }
+            tempConstraints.courses.splice(selectedCourseIndex, 1);
+            selectedCourseIndex = -1;
+            renderCoursesList();
+        }
+
+        function renderGroupsContainer() {
+            const container = document.getElementById('groupsContainer');
+            const allFaculties = ['English', 'Maths', ...tempConstraints.faculty];
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 150px 180px 40px; gap: 10px; padding: 10px; background: #34495e; color: white; border-radius: 8px 8px 0 0; font-weight: 600; font-size: 13px;">
+                    <div>Group Name</div>
+                    <div>Faculty</div>
+                    <div>💼 Work Placement</div>
+                    <div>Placement Day</div>
+                    <div></div>
+                </div>
+            ` + tempConstraints.classes.map((cls, i) => {
+                const config = tempConstraints.groupConfigs[cls] || { faculty: allFaculties[0], workPlacement: false, workPlacementDay: '' };
+                const hasWorkPlacement = config.workPlacement || false;
+                const workPlacementDay = config.workPlacementDay || '';
+                
+                return `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 150px 180px 40px; gap: 10px; padding: 12px; background: #f8f9fa; border: 1px solid #ecf0f1; border-top: none; align-items: center;">
+                        <input type="text" class="form-control" value="${cls}" 
+                               onchange="updateGroupName(${i}, this.value)" style="margin: 0;">
+                        <select class="form-control" onchange="updateGroupFaculty('${cls}', this.value)" style="margin: 0;">
+                            ${allFaculties.map(f => `<option value="${f}" ${config.faculty === f ? 'selected' : ''}>${f}</option>`).join('')}
+                        </select>
+                        <div style="text-align: center;">
+                            <input type="checkbox" id="wp-${cls}" ${hasWorkPlacement ? 'checked' : ''} 
+                                   onchange="updateWorkPlacement('${cls}', this.checked)"
+                                   style="width: 20px; height: 20px; cursor: pointer;">
+                            <label for="wp-${cls}" style="margin-left: 5px; cursor: pointer; font-size: 12px;">T-Level</label>
+                        </div>
+                        <select class="form-control" onchange="updateWorkPlacementDay('${cls}', this.value)" 
+                                style="margin: 0;" ${!hasWorkPlacement ? 'disabled' : ''}>
+                            <option value="">Select day...</option>
+                            ${tempConstraints.days.map(d => `<option value="${d}" ${workPlacementDay === d ? 'selected' : ''}>${d}</option>`).join('')}
+                        </select>
+                        <button class="btn btn-danger" onclick="removeGroup(${i})" style="padding: 8px;">🗑️</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateWorkPlacement(className, enabled) {
+            if (!tempConstraints.groupConfigs[className]) {
+                tempConstraints.groupConfigs[className] = {};
+            }
+            tempConstraints.groupConfigs[className].workPlacement = enabled;
+            if (!enabled) {
+                tempConstraints.groupConfigs[className].workPlacementDay = '';
+            }
+            renderGroupsContainer();
+        }
+
+        function updateWorkPlacementDay(className, day) {
+            if (!tempConstraints.groupConfigs[className]) {
+                tempConstraints.groupConfigs[className] = {};
+            }
+            tempConstraints.groupConfigs[className].workPlacementDay = day;
+        }
+
+        function updateGroupName(index, newName) {
+            const oldName = tempConstraints.classes[index];
+            tempConstraints.classes[index] = newName;
+            
+            if (tempConstraints.groupConfigs[oldName]) {
+                tempConstraints.groupConfigs[newName] = tempConstraints.groupConfigs[oldName];
+                delete tempConstraints.groupConfigs[oldName];
+            }
+        }
+
+        function updateGroupFaculty(className, faculty) {
+            if (!tempConstraints.groupConfigs[className]) {
+                tempConstraints.groupConfigs[className] = {};
+            }
+            tempConstraints.groupConfigs[className].faculty = faculty;
+        }
+
+        function addGroup() {
+            const groupName = prompt('Enter student group name:');
+            if (groupName && groupName.trim()) {
+                tempConstraints.classes.push(groupName.trim());
+                tempConstraints.groupConfigs[groupName.trim()] = { 
+                    faculty: tempConstraints.faculty[0] || '',
+                    workPlacement: false,
+                    workPlacementDay: ''
+                };
+                renderGroupsContainer();
+            }
+        }
+
+        function removeGroup(index) {
+            const className = tempConstraints.classes[index];
+            tempConstraints.classes.splice(index, 1);
+            delete tempConstraints.groupConfigs[className];
+            renderGroupsContainer();
+        }
+
+        function renderDaysCheckboxes() {
+            const container = document.getElementById('daysCheckboxes');
+            const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+            
+            container.innerHTML = allDays.map(day => `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="day-${day}" ${tempConstraints.days.includes(day) ? 'checked' : ''}>
+                    <label for="day-${day}">${day}</label>
+                </div>
+            `).join('');
+        }
+
+        let selectedTimeslotIndex = -1;
+        function renderTimeslotsList() {
+            const container = document.getElementById('timeslotsList');
+            container.innerHTML = tempConstraints.timeSlots.map((t, i) => `
+                <div class="list-item ${i === selectedTimeslotIndex ? 'selected' : ''}" onclick="selectTimeslot(${i})">
+                    ${t}
+                </div>
+            `).join('');
+        }
+
+        function selectTimeslot(index) {
+            selectedTimeslotIndex = index;
+            renderTimeslotsList();
+        }
+
+        function addTimeslot() {
+            const slot = prompt('Enter time slot (HH:MM-HH:MM):');
+            if (slot && slot.trim()) {
+                tempConstraints.timeSlots.push(slot.trim());
+                renderTimeslotsList();
+            }
+        }
+
+        function editTimeslot() {
+            if (selectedTimeslotIndex < 0) {
+                alert('Please select a time slot to edit!');
+                return;
+            }
+            const newSlot = prompt('Edit time slot:', tempConstraints.timeSlots[selectedTimeslotIndex]);
+            if (newSlot && newSlot.trim()) {
+                tempConstraints.timeSlots[selectedTimeslotIndex] = newSlot.trim();
+                renderTimeslotsList();
+            }
+        }
+
+        function removeTimeslot() {
+            if (selectedTimeslotIndex < 0) {
+                alert('Please select a time slot to remove!');
+                return;
+            }
+            tempConstraints.timeSlots.splice(selectedTimeslotIndex, 1);
+            selectedTimeslotIndex = -1;
+            renderTimeslotsList();
+        }
+
+        let selectedRoomIndex = -1;
+        function renderRoomsList() {
+            const container = document.getElementById('roomsList');
+            container.innerHTML = tempConstraints.rooms.map((r, i) => `
+                <div class="list-item ${i === selectedRoomIndex ? 'selected' : ''}" onclick="selectRoom(${i})">
+                    ${r}
+                </div>
+            `).join('');
+        }
+
+        function selectRoom(index) {
+            selectedRoomIndex = index;
+            renderRoomsList();
+        }
+
+        function addRoom() {
+            const room = prompt('Enter classroom name:');
+            if (room && room.trim()) {
+                tempConstraints.rooms.push(room.trim());
+                renderRoomsList();
+            }
+        }
+
+        function editRoom() {
+            if (selectedRoomIndex < 0) {
+                alert('Please select a classroom to edit!');
+                return;
+            }
+            const newRoom = prompt('Edit classroom name:', tempConstraints.rooms[selectedRoomIndex]);
+            if (newRoom && newRoom.trim()) {
+                tempConstraints.rooms[selectedRoomIndex] = newRoom.trim();
+                renderRoomsList();
+            }
+        }
+
+        function removeRoom() {
+            if (selectedRoomIndex < 0) {
+                alert('Please select a classroom to remove!');
+                return;
+            }
+            tempConstraints.rooms.splice(selectedRoomIndex, 1);
+            selectedRoomIndex = -1;
+            renderRoomsList();
+        }
+
+        function renderDayoffContainer() {
+            const container = document.getElementById('dayoffContainer');
+            const groupIds = new Set();
+            
+            tempConstraints.classes.forEach(cls => {
+                if (cls) {
+                    const groupId = cls[cls.length - 1].toUpperCase();
+                    if (/[A-Z]/.test(groupId)) {
+                        groupIds.add(groupId);
+                    }
+                }
+            });
+
+            const sortedGroups = Array.from(groupIds).sort();
+            
+            container.innerHTML = sortedGroups.map(groupId => {
+                const currentDaysOff = tempConstraints.groupDayOff[groupId] || [];
+                // Ensure it's an array (handle legacy single string values)
+                const daysOffArray = Array.isArray(currentDaysOff) ? currentDaysOff : (currentDaysOff ? [currentDaysOff] : []);
+                const classesInGroup = tempConstraints.classes.filter(c => c.endsWith(groupId));
+                
+                return `
+                    <div class="dayoff-group-item" style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                        <div style="margin-bottom: 10px;">
+                            <strong>Group ${groupId}</strong> 
+                            <span class="info-text">(${classesInGroup.join(', ') || '-'})</span>
+                            <span class="badge ${daysOffArray.length > 0 ? 'badge-warning' : 'badge-success'}" style="margin-left: 10px;">
+                                ${daysOffArray.length} day${daysOffArray.length !== 1 ? 's' : ''} off
+                            </span>
+                        </div>
+                        <div class="checkbox-group" style="background: white; padding: 10px; border-radius: 6px;">
+                            ${tempConstraints.days.map(d => `
+                                <div class="checkbox-item">
+                                    <input type="checkbox" 
+                                           id="dayoff-${groupId}-${d}" 
+                                           ${daysOffArray.includes(d) ? 'checked' : ''}
+                                           onchange="updateDayOff('${groupId}', '${d}', this.checked)">
+                                    <label for="dayoff-${groupId}-${d}">${d}</label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateDayOff(groupId, day, isChecked) {
+            // Ensure the groupDayOff entry is an array
+            if (!tempConstraints.groupDayOff[groupId]) {
+                tempConstraints.groupDayOff[groupId] = [];
+            }
+            // Convert legacy string to array if needed
+            if (!Array.isArray(tempConstraints.groupDayOff[groupId])) {
+                tempConstraints.groupDayOff[groupId] = tempConstraints.groupDayOff[groupId] ? 
+                    [tempConstraints.groupDayOff[groupId]] : [];
+            }
+            
+            if (isChecked) {
+                if (!tempConstraints.groupDayOff[groupId].includes(day)) {
+                    tempConstraints.groupDayOff[groupId].push(day);
+                }
+            } else {
+                tempConstraints.groupDayOff[groupId] = tempConstraints.groupDayOff[groupId].filter(d => d !== day);
+            }
+            
+            // Clean up empty arrays
+            if (tempConstraints.groupDayOff[groupId].length === 0) {
+                delete tempConstraints.groupDayOff[groupId];
+            }
+            
+            // Re-render to update badge
+            renderDayoffContainer();
+        }
+
+        function saveConstraints() {
+            // Collect days from checkboxes
+            const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+            tempConstraints.days = allDays.filter(day => document.getElementById(`day-${day}`)?.checked);
+
+            if (Object.keys(tempConstraints.requirements).length === 0) {
+                alert('Please define at least one subject requirement!');
+                return;
+            }
+            if (tempConstraints.days.length === 0) {
+                alert('Please select at least one day!');
+                return;
+            }
+            if (tempConstraints.timeSlots.length === 0) {
+                alert('Please define at least one time slot!');
+                return;
+            }
+            if (tempConstraints.classes.length === 0) {
+                alert('Please define at least one student group!');
+                return;
+            }
+            if (tempConstraints.rooms.length === 0) {
+                alert('Please define at least one classroom!');
+                return;
+            }
+
+            constraints = JSON.parse(JSON.stringify(tempConstraints));
+            
+            const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
+            const totalNeeded = totalPerClass * constraints.classes.length;
+            
+            updateConstraintsSummary();
+            updateStats();
+            closeConstraintsModal();
+            
+            alert(`Configuration saved!\n\nHours per class: ${totalPerClass}\nTotal hours needed: ${totalNeeded}`);
+        }
+
+        function resetConstraints() {
+            if (confirm('Reset all constraints to defaults?')) {
+                tempConstraints = {
+                    requirements: { "Maths": 4, "English": 4, "VOC": 4, "PBL": 4, "Tutorial": 1 },
+                    faculty: ["Performing Arts", "Art", "Media", "DCC", "Music"],
+                    courses: ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5"],
+                    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                    timeSlots: ["09:00-10:00", "10:10-11:10", "11:30-12:30", "13:30-14:30", "14:40-15:40", "15:50-16:50"],
+                    classes: ["L1A", "L2A", "L2B", "L2C", "L3A", "L3B", "L3C"],
+                    groupConfigs: {},
+                    rooms: ["Room A101", "Room A102", "Room A103", "Room B201", "Room B202", "Room B203", "Room C301", "Room C302", "Room D401", "Room D402"],
+                    groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] }
+                };
+                renderConstraintsModal();
+            }
+        }
+
+        function updateConstraintsSummary() {
+            const container = document.getElementById('constraintsSummary');
+            const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
+            
+            let html = '<div class="summary-item"><strong>📚 Requirements:</strong></div>';
+            Object.entries(constraints.requirements).forEach(([subject, count]) => {
+                html += `<div class="summary-item"><span>${subject}</span><span>${count}x</span></div>`;
+            });
+            
+            html += `<div class="summary-item" style="border-top: 2px solid #bdc3c7; margin-top: 8px; padding-top: 8px;">
+                        <span><strong>Hours per class</strong></span><span><strong>${totalPerClass}</strong></span>
+                     </div>`;
+            
+            html += `<div class="summary-item"><span>📅 Days</span><span>${constraints.days.length}</span></div>`;
+            html += `<div class="summary-item"><span>⏰ Time Slots</span><span>${constraints.timeSlots.length}</span></div>`;
+            html += `<div class="summary-item"><span>👥 Classes</span><span>${constraints.classes.length}</span></div>`;
+            html += `<div class="summary-item"><span>🏫 Rooms</span><span>${constraints.rooms.length}</span></div>`;
+            
+            // Add day-off summary
+            const groupsWithDayOff = Object.keys(constraints.groupDayOff).length;
+            if (groupsWithDayOff > 0) {
+                html += `<div class="summary-item"><span>🌴 Groups w/ days off</span><span>${groupsWithDayOff}</span></div>`;
+            }
+            
+            // Add work placement summary
+            const groupsWithWP = constraints.classes.filter(cls => {
+                const config = constraints.groupConfigs[cls] || {};
+                return config.workPlacement && config.workPlacementDay;
+            }).length;
+            if (groupsWithWP > 0) {
+                html += `<div class="summary-item"><span>💼 T-Level Groups</span><span>${groupsWithWP}</span></div>`;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        // ==================== TEACHER MODAL ====================
+        function openTeacherModal(editIndex = -1) {
+            editingTeacherIndex = editIndex;
+            
+            const modal = document.getElementById('teacherModal');
+            const title = document.getElementById('teacherModalTitle');
+            
+            // Populate faculty dropdown
+            const facultySelect = document.getElementById('teacherFaculty');
+            facultySelect.innerHTML = constraints.faculty.map(f => 
+                `<option value="${f}">${f}</option>`
+            ).join('');
+            
+            // Populate courses checkboxes
+            const coursesContainer = document.getElementById('teacherCourses');
+            coursesContainer.innerHTML = constraints.courses.map(c => `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="tc-${c}" value="${c}">
+                    <label for="tc-${c}">${c}</label>
+                </div>
+            `).join('');
+            
+            // Populate days checkboxes
+            const daysContainer = document.getElementById('teacherDays');
+            daysContainer.innerHTML = constraints.days.map(d => `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="td-${d}" value="${d}" checked>
+                    <label for="td-${d}">${d}</label>
+                </div>
+            `).join('');
+            
+            // Populate subjects checkboxes
+            const subjectsContainer = document.getElementById('teacherSubjects');
+            subjectsContainer.innerHTML = Object.keys(constraints.requirements).map(s => `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="ts-${s}" value="${s}">
+                    <label for="ts-${s}">${s}</label>
+                </div>
+            `).join('');
+            
+            if (editIndex >= 0) {
+                title.textContent = '✏️ Edit Teacher';
+                const teacher = teachers[editIndex];
+                
+                document.getElementById('teacherName').value = teacher.name;
+                document.getElementById('teacherHours').value = teacher.maxHours;
+                document.getElementById('teacherFaculty').value = teacher.faculty || '';
+                
+                teacher.courses?.forEach(c => {
+                    const cb = document.getElementById(`tc-${c}`);
+                    if (cb) cb.checked = true;
+                });
+                
+                constraints.days.forEach(d => {
+                    const cb = document.getElementById(`td-${d}`);
+                    if (cb) cb.checked = teacher.days.includes(d);
+                });
+                
+                teacher.subjects.forEach(s => {
+                    const cb = document.getElementById(`ts-${s}`);
+                    if (cb) cb.checked = true;
+                });
+            } else {
+                title.textContent = '➕ Add Teacher';
+                document.getElementById('teacherName').value = '';
+                document.getElementById('teacherHours').value = '20';
+            }
+            
+            modal.classList.add('active');
+        }
+
+        function closeTeacherModal() {
+            document.getElementById('teacherModal').classList.remove('active');
+            editingTeacherIndex = -1;
+        }
+
+        function saveTeacher() {
+            const name = document.getElementById('teacherName').value.trim();
+            const maxHours = parseInt(document.getElementById('teacherHours').value) || 20;
+            const faculty = document.getElementById('teacherFaculty').value;
+            
+            const courses = [];
+            constraints.courses.forEach(c => {
+                if (document.getElementById(`tc-${c}`)?.checked) courses.push(c);
+            });
+            
+            const days = [];
+            constraints.days.forEach(d => {
+                if (document.getElementById(`td-${d}`)?.checked) days.push(d);
+            });
+            
+            const subjects = [];
+            Object.keys(constraints.requirements).forEach(s => {
+                if (document.getElementById(`ts-${s}`)?.checked) subjects.push(s);
+            });
+            
+            if (!name) {
+                alert('Please enter teacher name!');
+                return;
+            }
+            if (days.length === 0) {
+                alert('Please select at least one day!');
+                return;
+            }
+            if (subjects.length === 0) {
+                alert('Please select at least one subject!');
+                return;
+            }
+            
+            // Check for duplicate names
+            const isDuplicate = teachers.some((t, i) => 
+                t.name.toLowerCase() === name.toLowerCase() && i !== editingTeacherIndex
+            );
+            if (isDuplicate) {
+                alert('A teacher with this name already exists!');
+                return;
+            }
+            
+            const teacher = { name, maxHours, faculty, courses, days, subjects };
+            
+            if (editingTeacherIndex >= 0) {
+                teachers[editingTeacherIndex] = teacher;
+            } else {
+                teachers.push(teacher);
+            }
+            
+            updateTeacherTable();
+            updateStats();
+            closeTeacherModal();
+        }
+
+        function updateTeacherTable() {
+            const tbody = document.getElementById('teacherTableBody');
+            tbody.innerHTML = teachers.map((t, i) => `
+                <tr class="${i === selectedTeacherIndex ? 'selected' : ''}" onclick="selectTeacher(${i})">
+                    <td>${t.name}</td>
+                    <td>${t.maxHours}</td>
+                    <td>${t.faculty || '-'}</td>
+                    <td>${t.courses?.join(', ') || '-'}</td>
+                    <td>${t.days.map(d => d.substring(0, 3)).join(', ')}</td>
+                    <td>${t.subjects.join(', ')}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('generateBtn').disabled = teachers.length === 0;
+        }
+
+        function selectTeacher(index) {
+            selectedTeacherIndex = index;
+            updateTeacherTable();
+        }
+
+        function editSelectedTeacher() {
+            if (selectedTeacherIndex < 0) {
+                alert('Please select a teacher to edit!');
+                return;
+            }
+            openTeacherModal(selectedTeacherIndex);
+        }
+
+        function removeSelectedTeacher() {
+            if (selectedTeacherIndex < 0) {
+                alert('Please select a teacher to remove!');
+                return;
+            }
+            if (confirm(`Remove teacher "${teachers[selectedTeacherIndex].name}"?`)) {
+                teachers.splice(selectedTeacherIndex, 1);
+                selectedTeacherIndex = -1;
+                updateTeacherTable();
+                updateStats();
+            }
+        }
+
+        function updateStats() {
+            const totalTeachers = teachers.length;
+            const totalHours = teachers.reduce((sum, t) => sum + t.maxHours, 0);
+            const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
+            const requiredHours = totalPerClass * constraints.classes.length;
+            
+            document.getElementById('totalTeachers').textContent = totalTeachers;
+            document.getElementById('totalHours').textContent = totalHours;
+            document.getElementById('requiredHours').textContent = requiredHours;
+        }
+
+        // ==================== SCHEDULE GENERATION ====================
+        function generateSchedule() {
+            if (teachers.length === 0) {
+                alert('Please add teachers before generating schedule!');
+                return;
+            }
+            
+            // Validate teachers for all subjects
+            const requiredSubjects = new Set(Object.keys(constraints.requirements));
+            const availableSubjects = new Set();
+            teachers.forEach(t => t.subjects.forEach(s => availableSubjects.add(s)));
+            
+            const missing = [...requiredSubjects].filter(s => !availableSubjects.has(s));
+            if (missing.length > 0) {
+                alert(`No teachers available for: ${missing.join(', ')}\n\nPlease add teachers who can teach these subjects!`);
+                return;
+            }
+            
+            const output = document.getElementById('scheduleOutput');
+            output.textContent = '🎯 Generating Perfect Schedule...\n' + '='.repeat(70) + '\n\n';
+            
+            // Run the AI scheduler
+            const result = runPerfectScheduler();
+            
+            if (result) {
+                schedule = result;
+                displaySchedule();
+            } else {
+                output.textContent += '\n❌ Could not generate perfect schedule\n';
+                alert('Could not generate schedule. Please check constraints and teacher availability.');
+            }
+        }
+
+        function runPerfectScheduler() {
+            const output = document.getElementById('scheduleOutput');
+            
+            // Step 1: Auto-generate classes
+            output.textContent += '📋 Step 1: Auto-Generating Classes with Faculty Matching...\n';
+            output.textContent += '-'.repeat(70) + '\n\n';
+            
+            const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
+            const totalTeacherHours = teachers.reduce((sum, t) => sum + t.maxHours, 0);
+            const totalClassHours = totalPerClass * constraints.classes.length;
+            
+            output.textContent += `Teacher hours available: ${totalTeacherHours}\n`;
+            output.textContent += `Class hours needed: ${totalClassHours}\n\n`;
+            
+            // Build teacher lookup by subject
+            const subjectTeachers = {};
+            teachers.forEach(t => {
+                t.subjects.forEach(s => {
+                    if (!subjectTeachers[s]) subjectTeachers[s] = [];
+                    subjectTeachers[s].push(t);
+                });
+            });
+            
+            const classesToSchedule = [];
+            const teacherHoursUsed = {};
+            teachers.forEach(t => teacherHoursUsed[t.name] = 0);
+            
+            let roomIdx = 0;
+            
+            // Assign classes
+            for (const className of constraints.classes) {
+                const group = className[className.length - 1];
+                const groupConfig = constraints.groupConfigs[className] || {};
+                const groupFaculty = groupConfig.faculty || '';
+                
+                for (const [subject, count] of Object.entries(constraints.requirements)) {
+                    for (let i = 0; i < count; i++) {
+                        // Score teachers
+                        const teacherScores = subjectTeachers[subject].map(t => {
+                            let score = 0;
+                            
+                            // Faculty match
+                            if (t.faculty && t.faculty === groupFaculty) score += 100;
+                            
+                            // Remaining capacity
+                            const remaining = t.maxHours - teacherHoursUsed[t.name];
+                            if (remaining > 0) score += remaining * 10;
+                            
+                            // Underutilization bonus
+                            if (teacherHoursUsed[t.name] < t.maxHours * 0.5) score += 20;
+                            
+                            // Day availability
+                            const classDays = getAvailableDaysForClass(className);
+                            const availableDays = t.days.filter(d => classDays.includes(d));
+                            score += availableDays.length * 2;
+                            
+                            return { teacher: t, score, availableDays };
+                        }).sort((a, b) => b.score - a.score);
+                        
+                        const best = teacherScores[0];
+                        const room = constraints.rooms[roomIdx % constraints.rooms.length];
+                        roomIdx++;
+                        
+                        classesToSchedule.push({
+                            teacher: best.teacher.name,
+                            class: className,
+                            subject: subject,
+                            room: room,
+                            days: best.availableDays.length > 0 ? best.availableDays : getAvailableDaysForClass(className)
+                        });
+                        
+                        teacherHoursUsed[best.teacher.name]++;
+                    }
+                }
+            }
+            
+            // Redistribution phase
+            output.textContent += 'Phase 2: Intelligent Redistribution...\n';
+            
+            let iterations = 0;
+            while (iterations < 10) {
+                iterations++;
+                
+                const overAllocated = teachers.filter(t => teacherHoursUsed[t.name] > t.maxHours);
+                const underAllocated = teachers.filter(t => teacherHoursUsed[t.name] < t.maxHours);
+                
+                if (overAllocated.length === 0 || underAllocated.length === 0) break;
+                
+                let redistributed = false;
+                
+                for (const overTeacher of overAllocated) {
+                    const excess = teacherHoursUsed[overTeacher.name] - overTeacher.maxHours;
+                    if (excess <= 0) continue;
+                    
+                    for (let i = 0; i < classesToSchedule.length && teacherHoursUsed[overTeacher.name] > overTeacher.maxHours; i++) {
+                        const cls = classesToSchedule[i];
+                        if (cls.teacher !== overTeacher.name) continue;
+                        
+                        for (const underTeacher of underAllocated) {
+                            if (teacherHoursUsed[underTeacher.name] >= underTeacher.maxHours) continue;
+                            if (!underTeacher.subjects.includes(cls.subject)) continue;
+                            
+                            const classDays = getAvailableDaysForClass(cls.class);
+                            const availableDays = underTeacher.days.filter(d => classDays.includes(d));
+                            
+                            if (availableDays.length > 0) {
+                                classesToSchedule[i].teacher = underTeacher.name;
+                                classesToSchedule[i].days = availableDays;
+                                
+                                teacherHoursUsed[overTeacher.name]--;
+                                teacherHoursUsed[underTeacher.name]++;
+                                
+                                redistributed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!redistributed) break;
+            }
+            
+            // Verify allocation
+            output.textContent += '\n✅ Classes Generated!\n';
+            output.textContent += 'Teacher assignments:\n';
+            
+            let allPerfect = true;
+            teachers.forEach(t => {
+                const hours = teacherHoursUsed[t.name];
+                const status = hours === t.maxHours ? '✅' : '❌';
+                output.textContent += `  ${status} ${t.name}: ${hours}/${t.maxHours}\n`;
+                if (hours !== t.maxHours) allPerfect = false;
+            });
+            
+            // Step 2: Create schedule
+            output.textContent += '\n📅 Step 2: Creating Perfect Schedule...\n';
+            output.textContent += '-'.repeat(70) + '\n\n';
+            
+            const schedule = [];
+            const teacherSchedule = {};
+            const classSchedule = {};
+            const roomSchedule = {};
+            const classDaySubjects = {};
+            
+            // Group by class
+            const classesByStudent = {};
+            classesToSchedule.forEach(c => {
+                if (!classesByStudent[c.class]) classesByStudent[c.class] = [];
+                classesByStudent[c.class].push(c);
+            });
+            
+            // Group classes by faculty for staggering
+            const classesByFaculty = {};
+            constraints.classes.forEach(cls => {
+                const config = constraints.groupConfigs[cls] || {};
+                const faculty = config.faculty || 'Unknown';
+                if (!classesByFaculty[faculty]) classesByFaculty[faculty] = [];
+                classesByFaculty[faculty].push(cls);
+            });
+            
+            // Process each faculty with staggering
+            for (const [faculty, facultyClasses] of Object.entries(classesByFaculty)) {
+                let staggerOffset = 0;
+                
+                for (const studentClass of facultyClasses) {
+                    const sessions = classesByStudent[studentClass] || [];
+                    
+                    // Group by subject
+                    const sessionsBySubject = {};
+                    sessions.forEach(s => {
+                        if (!sessionsBySubject[s.subject]) sessionsBySubject[s.subject] = [];
+                        sessionsBySubject[s.subject].push(s);
+                    });
+                    
+                    // Round-robin distribution
+                    const allSessionsList = [];
+                    const subjects = Object.keys(constraints.requirements);
+                    const maxCount = Math.max(...Object.values(sessionsBySubject).map(arr => arr.length));
+                    
+                    for (let i = 0; i < maxCount; i++) {
+                        for (const subject of subjects) {
+                            if (sessionsBySubject[subject] && i < sessionsBySubject[subject].length) {
+                                allSessionsList.push(sessionsBySubject[subject][i]);
+                            }
+                        }
+                    }
+                    
+                    const classAvailableDays = getAvailableDaysForClass(studentClass);
+                    
+                    for (const session of allSessionsList) {
+                        const { teacher, subject, room, days } = session;
+                        
+                        const validDays = days.filter(d => classAvailableDays.includes(d));
+                        const daysToUse = validDays.length > 0 ? validDays : classAvailableDays;
+                        
+                        // Sort days by subject count
+                        const dayPriority = daysToUse.map(day => {
+                            const key = `${studentClass}-${day}`;
+                            const daySubjects = classDaySubjects[key] || [];
+                            const count = daySubjects.filter(s => s === subject).length;
+                            return { day, count };
+                        }).sort((a, b) => a.count - b.count);
+                        
+                        let assigned = false;
+                        
+                        for (const { day } of dayPriority) {
+                            if (assigned) break;
+                            
+                            // Staggered time slots
+                            const staggeredSlots = [
+                                ...constraints.timeSlots.slice(staggerOffset),
+                                ...constraints.timeSlots.slice(0, staggerOffset)
+                            ];
+                            
+                            for (const time of staggeredSlots) {
+                                const teacherKey = `${teacher}-${day}-${time}`;
+                                const classKey = `${studentClass}-${day}-${time}`;
+                                const roomKey = `${room}-${day}-${time}`;
+                                
+                                if (!teacherSchedule[teacherKey] && 
+                                    !classSchedule[classKey] && 
+                                    !roomSchedule[roomKey]) {
+                                    
+                                    schedule.push({
+                                        teacher,
+                                        class: studentClass,
+                                        subject,
+                                        day,
+                                        time,
+                                        room
+                                    });
+                                    
+                                    teacherSchedule[teacherKey] = true;
+                                    classSchedule[classKey] = true;
+                                    roomSchedule[roomKey] = true;
+                                    
+                                    const subjectKey = `${studentClass}-${day}`;
+                                    if (!classDaySubjects[subjectKey]) classDaySubjects[subjectKey] = [];
+                                    classDaySubjects[subjectKey].push(subject);
+                                    
+                                    assigned = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!assigned) {
+                            output.textContent += `  ❌ Could not assign ${subject} for ${studentClass}\n`;
+                            return null;
+                        }
+                    }
+                    
+                    staggerOffset = (staggerOffset + 1) % constraints.timeSlots.length;
+                }
+            }
+            
+            // Step 3: Add Work Placement sessions for T-Level groups (FULL DAY)
+            output.textContent += '\n💼 Step 3: Adding Work Placement Days (T-Levels)...\n';
+            output.textContent += '-'.repeat(70) + '\n\n';
+            
+            let workPlacementCount = 0;
+            let workPlacementSessions = 0;
+            
+            for (const studentClass of constraints.classes) {
+                const config = constraints.groupConfigs[studentClass] || {};
+                
+                if (config.workPlacement && config.workPlacementDay) {
+                    const wpDay = config.workPlacementDay;
+                    let sessionsAdded = 0;
+                    const totalSlots = constraints.timeSlots.length;
+                    
+                    output.textContent += `  ${studentClass}: Adding ${totalSlots} Work Placement sessions on ${wpDay}...\n`;
+                    
+                    // Add ALL time slots on the work placement day (full day of industry placement)
+                    for (let slotIdx = 0; slotIdx < constraints.timeSlots.length; slotIdx++) {
+                        const time = constraints.timeSlots[slotIdx];
+                        const classKey = `${studentClass}-${wpDay}-${time}`;
+                        
+                        // Check if already scheduled
+                        if (classSchedule[classKey]) {
+                            output.textContent += `    ⚠️ Slot ${time} already occupied\n`;
+                        } else {
+                            schedule.push({
+                                teacher: 'Industry Placement',
+                                class: studentClass,
+                                subject: 'Work Placement',
+                                day: wpDay,
+                                time: time,
+                                room: 'Employer Site',
+                                isWorkPlacement: true
+                            });
+                            
+                            classSchedule[classKey] = true;
+                            sessionsAdded++;
+                            workPlacementSessions++;
+                        }
+                    }
+                    
+                    if (sessionsAdded === totalSlots) {
+                        output.textContent += `    ✅ Full day scheduled (${sessionsAdded}/${totalSlots} sessions)\n`;
+                        workPlacementCount++;
+                    } else if (sessionsAdded > 0) {
+                        output.textContent += `    ⚠️ Partial day (${sessionsAdded}/${totalSlots} sessions)\n`;
+                        workPlacementCount++;
+                    } else {
+                        output.textContent += `    ❌ Could not schedule any sessions\n`;
+                    }
+                }
+            }
+            
+            if (workPlacementCount === 0) {
+                output.textContent += '  No T-Level work placements configured\n';
+            } else {
+                output.textContent += `\n  Total: ${workPlacementCount} groups with Work Placement (${workPlacementSessions} sessions)\n`;
+            }
+            
+            output.textContent += `\n✅ Schedule created: ${schedule.length} assignments\n`;
+            
+            return schedule;
+        }
+
+        function getAvailableDaysForClass(className) {
+            const group = className[className.length - 1].toUpperCase();
+            const daysOff = constraints.groupDayOff[group];
+            const config = constraints.groupConfigs[className] || {};
+            
+            let excludedDays = [];
+            
+            // Add regular days off
+            if (daysOff) {
+                const daysOffArray = Array.isArray(daysOff) ? daysOff : [daysOff];
+                excludedDays = [...daysOffArray];
+            }
+            
+            // Add work placement day (T-Level groups have this day at employer site)
+            if (config.workPlacement && config.workPlacementDay) {
+                if (!excludedDays.includes(config.workPlacementDay)) {
+                    excludedDays.push(config.workPlacementDay);
+                }
+            }
+            
+            if (excludedDays.length > 0) {
+                return constraints.days.filter(d => !excludedDays.includes(d));
+            }
+            return [...constraints.days];
+        }
+
+        function displaySchedule() {
+            const output = document.getElementById('scheduleOutput');
+            output.textContent = '🎯 PERFECT SCHEDULE GENERATED!\n';
+            output.textContent += '='.repeat(80) + '\n\n';
+            
+            // Show constraints
+            const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
+            output.textContent += `📊 Applied Constraints:\n`;
+            output.textContent += `  Classes: ${constraints.classes.length}\n`;
+            output.textContent += `  Days: ${constraints.days.length}\n`;
+            output.textContent += `  Time Slots: ${constraints.timeSlots.length}\n`;
+            output.textContent += `  Hours per Class: ${totalPerClass}\n\n`;
+            
+            // Day-off info
+            if (Object.keys(constraints.groupDayOff).length > 0) {
+                output.textContent += '📅 Group Day-Off Schedule:\n';
+                Object.entries(constraints.groupDayOff).sort().forEach(([group, daysOff]) => {
+                    const classesInGroup = constraints.classes.filter(c => c.endsWith(group));
+                    if (classesInGroup.length > 0) {
+                        const daysOffArray = Array.isArray(daysOff) ? daysOff : [daysOff];
+                        output.textContent += `  Group ${group} (${classesInGroup.join(', ')}): ${daysOffArray.join(', ')} OFF\n`;
+                    }
+                });
+                output.textContent += '\n';
+            }
+            
+            // Work Placement info
+            const workPlacementGroups = constraints.classes.filter(cls => {
+                const config = constraints.groupConfigs[cls] || {};
+                return config.workPlacement && config.workPlacementDay;
+            });
+            
+            if (workPlacementGroups.length > 0) {
+                output.textContent += '💼 T-Level Work Placement Schedule:\n';
+                workPlacementGroups.forEach(cls => {
+                    const config = constraints.groupConfigs[cls];
+                    const sessionsPerDay = constraints.timeSlots.length;
+                    output.textContent += `  ${cls}: Full day (${sessionsPerDay} hrs) Industry Placement on ${config.workPlacementDay}\n`;
+                });
+                output.textContent += '\n';
+            }
+            
+            // Group by day
+            const scheduleByDay = {};
+            schedule.forEach(s => {
+                if (!scheduleByDay[s.day]) scheduleByDay[s.day] = [];
+                scheduleByDay[s.day].push(s);
+            });
+            
+            // Display by day
+            for (const day of constraints.days) {
+                if (!scheduleByDay[day]) continue;
+                
+                output.textContent += `📅 ${day}\n`;
+                output.textContent += '-'.repeat(80) + '\n';
+                
+                const daySchedule = scheduleByDay[day].sort((a, b) => 
+                    constraints.timeSlots.indexOf(a.time) - constraints.timeSlots.indexOf(b.time)
+                );
+                
+                daySchedule.forEach(s => {
+                    output.textContent += `  ${s.time.padEnd(12)} | ${s.class.padEnd(6)} | ${s.subject.padEnd(10)} | ${s.teacher.padEnd(15)} | ${s.room}\n`;
+                });
+                
+                output.textContent += '\n';
+            }
+            
+            // Verification
+            output.textContent += '\n📊 VERIFICATION\n';
+            output.textContent += '='.repeat(80) + '\n\n';
+            
+            // Day-off verification
+            if (Object.keys(constraints.groupDayOff).length > 0) {
+                output.textContent += '📅 Day-Off Verification:\n';
+                let dayOffPerfect = true;
+                
+                constraints.classes.forEach(className => {
+                    const group = className[className.length - 1].toUpperCase();
+                    const daysOff = constraints.groupDayOff[group];
+                    const config = constraints.groupConfigs[className] || {};
+                    
+                    if (daysOff) {
+                        const daysOffArray = Array.isArray(daysOff) ? daysOff : [daysOff];
+                        let classViolations = [];
+                        let workPlacementInfo = '';
+                        
+                        daysOffArray.forEach(dayOff => {
+                            // Exclude work placement sessions from violations (they're intentionally on day off)
+                            const sessionsOnDayOff = schedule.filter(s => 
+                                s.class === className && s.day === dayOff && !s.isWorkPlacement
+                            );
+                            
+                            // Check if this day has work placement
+                            if (config.workPlacement && config.workPlacementDay === dayOff) {
+                                workPlacementInfo = ` (💼 WP on ${dayOff})`;
+                            }
+                            
+                            if (sessionsOnDayOff.length > 0) {
+                                classViolations.push(`${sessionsOnDayOff.length} on ${dayOff}`);
+                                dayOffPerfect = false;
+                            }
+                        });
+                        
+                        if (classViolations.length > 0) {
+                            output.textContent += `  ❌ ${className}: ${classViolations.join(', ')}${workPlacementInfo}\n`;
+                        } else {
+                            output.textContent += `  ✅ ${className}: ${daysOffArray.join(', ')} free${workPlacementInfo}\n`;
+                        }
+                    }
+                });
+                
+                if (dayOffPerfect) {
+                    output.textContent += '  ✅ All day-off constraints satisfied!\n';
+                }
+                output.textContent += '\n';
+            }
+            
+            // Class breakdown
+            output.textContent += '📚 Class Requirements:\n';
+            let allClassesPerfect = true;
+            
+            constraints.classes.forEach(className => {
+                const classScheduleItems = schedule.filter(s => s.class === className);
+                const subjectCounts = {};
+                let wpHours = 0;
+                
+                classScheduleItems.forEach(s => {
+                    if (s.isWorkPlacement) {
+                        wpHours++;
+                    } else {
+                        subjectCounts[s.subject] = (subjectCounts[s.subject] || 0) + 1;
+                    }
+                });
+                
+                let allOk = true;
+                for (const [subject, required] of Object.entries(constraints.requirements)) {
+                    if ((subjectCounts[subject] || 0) < required) {
+                        allOk = false;
+                        break;
+                    }
+                }
+                
+                const status = allOk ? '✅' : '❌';
+                if (!allOk) allClassesPerfect = false;
+                
+                const subjectStr = Object.keys(constraints.requirements)
+                    .map(s => `${s[0]}:${subjectCounts[s] || 0}`)
+                    .join(' ');
+                
+                const wpIndicator = wpHours > 0 ? ` +💼${wpHours}h` : '';
+                const totalHours = classScheduleItems.length;
+                output.textContent += `  ${status} ${className}: ${totalHours}h (${subjectStr}${wpIndicator})\n`;
+            });
+            
+            // Work Placement verification
+            const wpGroups = constraints.classes.filter(cls => {
+                const config = constraints.groupConfigs[cls] || {};
+                return config.workPlacement && config.workPlacementDay;
+            });
+            
+            if (wpGroups.length > 0) {
+                output.textContent += '\n💼 Work Placement Verification:\n';
+                let allWpOk = true;
+                
+                wpGroups.forEach(className => {
+                    const config = constraints.groupConfigs[className];
+                    const wpSessions = schedule.filter(s => s.class === className && s.isWorkPlacement);
+                    const expectedSessions = constraints.timeSlots.length;
+                    
+                    if (wpSessions.length === expectedSessions) {
+                        output.textContent += `  ✅ ${className}: Full day (${wpSessions.length}/${expectedSessions} hrs) on ${config.workPlacementDay}\n`;
+                    } else if (wpSessions.length > 0) {
+                        output.textContent += `  ⚠️ ${className}: Partial day (${wpSessions.length}/${expectedSessions} hrs) on ${config.workPlacementDay}\n`;
+                    } else {
+                        output.textContent += `  ❌ ${className}: Work Placement not scheduled!\n`;
+                        allWpOk = false;
+                    }
+                });
+                
+                if (allWpOk) {
+                    output.textContent += '  ✅ All T-Level work placements scheduled!\n';
+                }
+            }
+            
+            // Teacher hours
+            output.textContent += '\n👨‍🏫 Teacher Hours:\n';
+            let allTeachersPerfect = true;
+            
+            teachers.forEach(t => {
+                const teacherSessions = schedule.filter(s => s.teacher === t.name);
+                const hours = teacherSessions.length;
+                const status = hours === t.maxHours ? '✅' : '❌';
+                
+                if (hours !== t.maxHours) allTeachersPerfect = false;
+                
+                output.textContent += `  ${status} ${t.name}: ${hours}/${t.maxHours}\n`;
+            });
+            
+            // Final verdict
+            output.textContent += '\n';
+            const dayOffOk = Object.keys(constraints.groupDayOff).length === 0 || 
+                schedule.every(s => {
+                    if (s.isWorkPlacement) return true; // Work placement allowed on day off
+                    const group = s.class[s.class.length - 1].toUpperCase();
+                    const daysOff = constraints.groupDayOff[group];
+                    if (!daysOff) return true;
+                    const daysOffArray = Array.isArray(daysOff) ? daysOff : [daysOff];
+                    return !daysOffArray.includes(s.day);
+                });
+            
+            // Count work placements
+            const wpCount = schedule.filter(s => s.isWorkPlacement).length;
+            const wpExpected = wpGroups.length;
+            
+            if (allTeachersPerfect && allClassesPerfect && dayOffOk) {
+                output.textContent += '🎉 PERFECT! All constraints satisfied!\n';
+                let wpMsg = wpCount > 0 ? `\n✓ ${wpCount} T-Level work placements scheduled` : '';
+                alert(`✅ PERFECT SCHEDULE!\n\n✓ All teachers at exact hours\n✓ All classes have correct requirements\n✓ All day-off constraints satisfied\n✓ Zero conflicts${wpMsg}\n\nTotal: ${schedule.length} assignments`);
+            } else {
+                output.textContent += '⚠️ Some constraints not perfectly met\n';
+                alert(`Schedule created: ${schedule.length} assignments\nSome constraints may need adjustment`);
+            }
+        }
+
+        function clearSchedule() {
+            schedule = [];
+            document.getElementById('scheduleOutput').textContent = 'Click "GENERATE PERFECT SCHEDULE" to create your schedule...';
+        }
+
+        function exportToPDF() {
+            if (schedule.length === 0) {
+                alert('Please generate a schedule first!');
+                return;
+            }
+            
+            // Create a printable version
+            let html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Perfect Class Schedule</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #667eea; text-align: center; }
+                        h2 { color: #34495e; margin-top: 30px; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th { background: #34495e; color: white; padding: 10px; text-align: left; }
+                        td { padding: 8px; border-bottom: 1px solid #ddd; }
+                        tr:nth-child(even) { background: #f8f9fa; }
+                        .summary { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                        @media print { body { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    <h1>🎯 Perfect Class Schedule</h1>
+                    <p style="text-align: center;">Generated: ${new Date().toLocaleString()}</p>
+                    
+                    <div class="summary">
+                        <strong>Configuration:</strong><br>
+                        Classes: ${constraints.classes.length} | 
+                        Days: ${constraints.days.length} | 
+                        Time Slots: ${constraints.timeSlots.length} | 
+                        Total Sessions: ${schedule.length}
+                    </div>
+            `;
+            
+            // Group by class
+            const scheduleByClass = {};
+            schedule.forEach(s => {
+                if (!scheduleByClass[s.class]) scheduleByClass[s.class] = [];
+                scheduleByClass[s.class].push(s);
+            });
+            
+            for (const className of constraints.classes.sort()) {
+                if (!scheduleByClass[className]) continue;
+                
+                html += `<h2>${className} Schedule</h2>`;
+                html += `<table><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th></tr>`;
+                
+                const classScheduleByDay = {};
+                scheduleByClass[className].forEach(s => {
+                    if (!classScheduleByDay[s.day]) classScheduleByDay[s.day] = [];
+                    classScheduleByDay[s.day].push(s);
+                });
+                
+                for (const day of constraints.days) {
+                    if (!classScheduleByDay[day]) continue;
+                    
+                    const daySessions = classScheduleByDay[day].sort((a, b) => 
+                        constraints.timeSlots.indexOf(a.time) - constraints.timeSlots.indexOf(b.time)
+                    );
+                    
+                    daySessions.forEach((s, i) => {
+                        html += `<tr>
+                            <td>${i === 0 ? day : ''}</td>
+                            <td>${s.time}</td>
+                            <td>${s.subject}</td>
+                            <td>${s.teacher}</td>
+                            <td>${s.room}</td>
+                        </tr>`;
+                    });
+                }
+                
+                html += `</table>`;
+            }
+            
+            html += `</body></html>`;
+            
+            // Open in new window for printing
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
+            printWindow.document.close();
+            printWindow.print();
+        }
+    </script>
+</body>
+</html>
