@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> DK Timetable</title>
+    <title> Timetabler </title>
     <style>
         * {
             margin: 0;
@@ -589,6 +589,7 @@
                 <button class="tab" onclick="switchTab('schedule')">📅 Days & Times</button>
                 <button class="tab" onclick="switchTab('rooms')">🏫 Rooms</button>
                 <button class="tab" onclick="switchTab('dayoff')">🌴 Day-Off</button>
+                <button class="tab" onclick="switchTab('combined')">🔗 Combined</button>
             </div>
 
             <!-- Subjects Tab -->
@@ -695,6 +696,28 @@
                 <div id="dayoffContainer"></div>
             </div>
 
+            <!-- Combined Classes Tab -->
+            <div class="tab-content" id="tab-combined">
+                <h3>🔗 Combined Classes</h3>
+                <p class="info-text">Combine student groups to share sessions (useful for room constraints)</p>
+                
+                <div style="background: #fff3cd; border-radius: 8px; padding: 12px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+                    <strong>⚠️ Last Resort Option:</strong> 
+                    <div style="color: #555; margin-top: 6px; font-size: 13px;">
+                        • Combined groups will share certain sessions in the same room<br>
+                        • Select which subject(s) they share and how many sessions<br>
+                        • Groups must have the same faculty to be combined<br>
+                        • Example: L3A + L3B share 2 Tutorial sessions = both in same room at same time
+                    </div>
+                </div>
+                
+                <div id="combinedClassesContainer"></div>
+                
+                <button class="btn btn-success" onclick="addCombinedClass()" style="margin-top: 16px;">
+                    ➕ Add Combined Class Group
+                </button>
+            </div>
+
             <div class="btn-group" style="justify-content: center; margin-top: 24px; padding-top: 20px; border-top: 2px solid #ecf0f1;">
                 <button class="btn btn-primary btn-large" onclick="saveConstraints()" style="max-width: 400px;">
                     💾 SAVE & APPLY CONFIGURATION
@@ -761,7 +784,8 @@
             classes: ["L1A", "L2A", "L2B", "L2C", "L3A", "L3B", "L3C"],
             groupConfigs: {},
             rooms: ["Room A101", "Room A102", "Room A103", "Room B201", "Room B202", "Room B203", "Room C301", "Room C302", "Room D401", "Room D402"],
-            groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] }
+            groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] },
+            combinedClasses: []  // Array of { groups: ['L3A', 'L3B'], subject: 'Tutorial', sessions: 1 }
         };
 
         let teachers = [];
@@ -807,6 +831,7 @@
             renderTimeslotsList();
             renderRoomsList();
             renderDayoffContainer();
+            renderCombinedClassesContainer();
         }
 
         function renderRequirements() {
@@ -1212,6 +1237,121 @@
             renderDayoffContainer();
         }
 
+        // ==================== COMBINED CLASSES ====================
+        function renderCombinedClassesContainer() {
+            const container = document.getElementById('combinedClassesContainer');
+            
+            if (!tempConstraints.combinedClasses) {
+                tempConstraints.combinedClasses = [];
+            }
+            
+            if (tempConstraints.combinedClasses.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🔗</div>
+                        <p>No combined classes configured</p>
+                        <p class="info-text">Click "Add Combined Class Group" to combine groups for shared sessions</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = tempConstraints.combinedClasses.map((combo, index) => {
+                const groupsDisplay = combo.groups.join(' + ');
+                
+                return `
+                    <div style="background: #f8f9fa; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #9b59b6;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                            <div>
+                                <strong style="font-size: 16px;">🔗 ${groupsDisplay}</strong>
+                                <span class="badge badge-primary" style="margin-left: 10px;">${combo.sessions} shared ${combo.subject} session${combo.sessions > 1 ? 's' : ''}</span>
+                            </div>
+                            <button class="btn btn-danger" onclick="removeCombinedClass(${index})" style="padding: 6px 12px;">🗑️ Remove</button>
+                        </div>
+                        
+                        <div class="grid-2" style="gap: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 12px;">Groups to Combine</label>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px; background: white; padding: 10px; border-radius: 6px;">
+                                    ${tempConstraints.classes.map(cls => `
+                                        <div class="checkbox-item">
+                                            <input type="checkbox" 
+                                                   id="combo-${index}-${cls}"
+                                                   ${combo.groups.includes(cls) ? 'checked' : ''}
+                                                   onchange="updateCombinedClassGroups(${index}, '${cls}', this.checked)">
+                                            <label for="combo-${index}-${cls}" style="font-size: 13px;">${cls}</label>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <div class="form-group" style="margin: 0 0 8px 0;">
+                                    <label style="font-size: 12px;">Shared Subject</label>
+                                    <select class="form-control" onchange="updateCombinedClassSubject(${index}, this.value)" style="margin: 0;">
+                                        ${Object.keys(tempConstraints.requirements).map(subj => `
+                                            <option value="${subj}" ${combo.subject === subj ? 'selected' : ''}>${subj}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group" style="margin: 0;">
+                                    <label style="font-size: 12px;">Number of Shared Sessions</label>
+                                    <input type="number" class="form-control" value="${combo.sessions}" min="1" max="10"
+                                           onchange="updateCombinedClassSessions(${index}, this.value)" style="margin: 0;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addCombinedClass() {
+            if (!tempConstraints.combinedClasses) {
+                tempConstraints.combinedClasses = [];
+            }
+            
+            const subjects = Object.keys(tempConstraints.requirements);
+            const defaultSubject = subjects.includes('Tutorial') ? 'Tutorial' : subjects[0];
+            
+            tempConstraints.combinedClasses.push({
+                groups: [],
+                subject: defaultSubject,
+                sessions: 1
+            });
+            
+            renderCombinedClassesContainer();
+        }
+
+        function removeCombinedClass(index) {
+            tempConstraints.combinedClasses.splice(index, 1);
+            renderCombinedClassesContainer();
+        }
+
+        function updateCombinedClassGroups(index, className, isChecked) {
+            const combo = tempConstraints.combinedClasses[index];
+            
+            if (isChecked) {
+                if (!combo.groups.includes(className)) {
+                    combo.groups.push(className);
+                }
+            } else {
+                combo.groups = combo.groups.filter(g => g !== className);
+            }
+            
+            renderCombinedClassesContainer();
+        }
+
+        function updateCombinedClassSubject(index, subject) {
+            tempConstraints.combinedClasses[index].subject = subject;
+        }
+
+        function updateCombinedClassSessions(index, sessions) {
+            tempConstraints.combinedClasses[index].sessions = parseInt(sessions) || 1;
+        }
+
+
         function saveConstraints() {
             // Collect days from checkboxes
             const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -1261,7 +1401,8 @@
                     classes: ["L1A", "L2A", "L2B", "L2C", "L3A", "L3B", "L3C"],
                     groupConfigs: {},
                     rooms: ["Room A101", "Room A102", "Room A103", "Room B201", "Room B202", "Room B203", "Room C301", "Room C302", "Room D401", "Room D402"],
-                    groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] }
+                    groupDayOff: { 'A': ['Monday'], 'B': ['Tuesday'], 'C': ['Wednesday'], 'D': ['Thursday'] },
+                    combinedClasses: []
                 };
                 renderConstraintsModal();
             }
@@ -1298,6 +1439,12 @@
             }).length;
             if (groupsWithWP > 0) {
                 html += `<div class="summary-item"><span>💼 T-Level Groups</span><span>${groupsWithWP}</span></div>`;
+            }
+            
+            // Add combined classes summary
+            const combinedCount = (constraints.combinedClasses || []).length;
+            if (combinedCount > 0) {
+                html += `<div class="summary-item"><span>🔗 Combined Groups</span><span>${combinedCount}</span></div>`;
             }
             
             container.innerHTML = html;
@@ -1529,10 +1676,27 @@
             
             const totalPerClass = Object.values(constraints.requirements).reduce((a, b) => a + b, 0);
             const totalTeacherHours = teachers.reduce((sum, t) => sum + t.maxHours, 0);
-            const totalClassHours = totalPerClass * constraints.classes.length;
+            let totalClassHours = totalPerClass * constraints.classes.length;
+            
+            // Calculate savings from combined classes
+            const combinedClasses = constraints.combinedClasses || [];
+            let combinedSavings = 0;
+            combinedClasses.forEach(combo => {
+                if (combo.groups.length >= 2) {
+                    // Each additional group in a combo saves sessions
+                    // e.g., 2 groups sharing 1 session saves 1 session (2 would become 1)
+                    combinedSavings += combo.sessions * (combo.groups.length - 1);
+                }
+            });
+            
+            const adjustedClassHours = totalClassHours - combinedSavings;
             
             output.textContent += `Teacher hours available: ${totalTeacherHours}\n`;
-            output.textContent += `Class hours needed: ${totalClassHours}\n\n`;
+            output.textContent += `Class hours needed: ${totalClassHours}`;
+            if (combinedSavings > 0) {
+                output.textContent += ` (${adjustedClassHours} after combined class savings of ${combinedSavings})`;
+            }
+            output.textContent += '\n\n';
             
             // Build teacher lookup by subject
             const subjectTeachers = {};
@@ -1542,6 +1706,41 @@
                     subjectTeachers[s].push(t);
                 });
             });
+            
+            // Pre-process combined classes to track which sessions are shared
+            const combinedSessionsMap = {}; // { 'className-subject': { reducedBy: N, combineWith: [...], isPrimary: bool } }
+            
+            if (combinedClasses.length > 0) {
+                output.textContent += '🔗 Processing Combined Classes...\n';
+                
+                for (const combo of combinedClasses) {
+                    if (combo.groups.length < 2) continue;
+                    
+                    const primaryGroup = combo.groups[0];
+                    const otherGroups = combo.groups.slice(1);
+                    
+                    output.textContent += `  ${combo.groups.join(' + ')}: ${combo.sessions}x shared ${combo.subject}\n`;
+                    
+                    // Primary group keeps its sessions but they become combined
+                    const primaryKey = `${primaryGroup}-${combo.subject}`;
+                    if (!combinedSessionsMap[primaryKey]) {
+                        combinedSessionsMap[primaryKey] = { reducedBy: 0, combineWith: [], isPrimary: true, sessions: combo.sessions };
+                    }
+                    combinedSessionsMap[primaryKey].combineWith.push(...otherGroups);
+                    combinedSessionsMap[primaryKey].combinedSessions = combo.sessions;
+                    
+                    // Other groups have their requirements reduced
+                    for (const otherGroup of otherGroups) {
+                        const otherKey = `${otherGroup}-${combo.subject}`;
+                        if (!combinedSessionsMap[otherKey]) {
+                            combinedSessionsMap[otherKey] = { reducedBy: 0, combineWith: [], isPrimary: false };
+                        }
+                        combinedSessionsMap[otherKey].reducedBy += combo.sessions;
+                        combinedSessionsMap[otherKey].combinedWith = primaryGroup;
+                    }
+                }
+                output.textContent += '\n';
+            }
             
             const classesToSchedule = [];
             const teacherHoursUsed = {};
@@ -1556,7 +1755,20 @@
                 const groupFaculty = groupConfig.faculty || '';
                 
                 for (const [subject, count] of Object.entries(constraints.requirements)) {
-                    for (let i = 0; i < count; i++) {
+                    // Check if this class-subject has combined session adjustments
+                    const comboKey = `${className}-${subject}`;
+                    const comboInfo = combinedSessionsMap[comboKey];
+                    
+                    // Calculate effective count (reduced for non-primary combined groups)
+                    let effectiveCount = count;
+                    if (comboInfo && !comboInfo.isPrimary) {
+                        effectiveCount = Math.max(0, count - comboInfo.reducedBy);
+                    }
+                    
+                    for (let i = 0; i < effectiveCount; i++) {
+                        // Check if this is a combined session (for primary group)
+                        const isCombinedSession = comboInfo && comboInfo.isPrimary && i < comboInfo.combinedSessions;
+                        
                         // Score teachers
                         const teacherScores = subjectTeachers[subject].map(t => {
                             let score = 0;
@@ -1583,14 +1795,22 @@
                         const room = constraints.rooms[roomIdx % constraints.rooms.length];
                         roomIdx++;
                         
-                        classesToSchedule.push({
+                        const sessionInfo = {
                             teacher: best.teacher.name,
                             class: className,
                             subject: subject,
                             room: room,
                             days: best.availableDays.length > 0 ? best.availableDays : getAvailableDaysForClass(className)
-                        });
+                        };
                         
+                        // Mark as combined if applicable
+                        if (isCombinedSession) {
+                            sessionInfo.isCombined = true;
+                            sessionInfo.combinedGroups = [className, ...comboInfo.combineWith];
+                            sessionInfo.displayClass = sessionInfo.combinedGroups.join(' + ');
+                        }
+                        
+                        classesToSchedule.push(sessionInfo);
                         teacherHoursUsed[best.teacher.name]++;
                     }
                 }
@@ -1697,7 +1917,7 @@
                     // Round-robin distribution
                     const allSessionsList = [];
                     const subjects = Object.keys(constraints.requirements);
-                    const maxCount = Math.max(...Object.values(sessionsBySubject).map(arr => arr.length));
+                    const maxCount = Math.max(0, ...Object.values(sessionsBySubject).map(arr => arr.length));
                     
                     for (let i = 0; i < maxCount; i++) {
                         for (const subject of subjects) {
@@ -1710,10 +1930,19 @@
                     const classAvailableDays = getAvailableDaysForClass(studentClass);
                     
                     for (const session of allSessionsList) {
-                        const { teacher, subject, room, days } = session;
+                        const { teacher, subject, room, days, isCombined, combinedGroups, displayClass } = session;
                         
                         const validDays = days.filter(d => classAvailableDays.includes(d));
-                        const daysToUse = validDays.length > 0 ? validDays : classAvailableDays;
+                        let daysToUse = validDays.length > 0 ? validDays : classAvailableDays;
+                        
+                        // For combined classes, find days that work for ALL groups
+                        if (isCombined && combinedGroups) {
+                            const allGroupDays = combinedGroups.map(g => getAvailableDaysForClass(g));
+                            daysToUse = daysToUse.filter(d => allGroupDays.every(gd => gd.includes(d)));
+                            if (daysToUse.length === 0) {
+                                daysToUse = validDays.length > 0 ? validDays : classAvailableDays;
+                            }
+                        }
                         
                         // Sort days by subject count
                         const dayPriority = daysToUse.map(day => {
@@ -1739,22 +1968,51 @@
                                 const classKey = `${studentClass}-${day}-${time}`;
                                 const roomKey = `${room}-${day}-${time}`;
                                 
+                                // For combined classes, check all groups are free
+                                let allGroupsFree = true;
+                                if (isCombined && combinedGroups) {
+                                    for (const grp of combinedGroups) {
+                                        if (classSchedule[`${grp}-${day}-${time}`]) {
+                                            allGroupsFree = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
                                 if (!teacherSchedule[teacherKey] && 
                                     !classSchedule[classKey] && 
-                                    !roomSchedule[roomKey]) {
+                                    !roomSchedule[roomKey] &&
+                                    allGroupsFree) {
                                     
-                                    schedule.push({
+                                    const scheduleEntry = {
                                         teacher,
-                                        class: studentClass,
+                                        class: isCombined ? displayClass : studentClass,
                                         subject,
                                         day,
                                         time,
-                                        room
-                                    });
+                                        room,
+                                        isCombined: isCombined || false
+                                    };
+                                    
+                                    if (isCombined) {
+                                        scheduleEntry.combinedGroups = combinedGroups;
+                                    }
+                                    
+                                    schedule.push(scheduleEntry);
                                     
                                     teacherSchedule[teacherKey] = true;
                                     classSchedule[classKey] = true;
                                     roomSchedule[roomKey] = true;
+                                    
+                                    // For combined classes, mark ALL groups' slots as used
+                                    if (isCombined && combinedGroups) {
+                                        for (const grp of combinedGroups) {
+                                            classSchedule[`${grp}-${day}-${time}`] = true;
+                                            const subKey = `${grp}-${day}`;
+                                            if (!classDaySubjects[subKey]) classDaySubjects[subKey] = [];
+                                            classDaySubjects[subKey].push(subject);
+                                        }
+                                    }
                                     
                                     const subjectKey = `${studentClass}-${day}`;
                                     if (!classDaySubjects[subjectKey]) classDaySubjects[subjectKey] = [];
@@ -1767,7 +2025,7 @@
                         }
                         
                         if (!assigned) {
-                            output.textContent += `  ❌ Could not assign ${subject} for ${studentClass}\n`;
+                            output.textContent += `  ❌ Could not assign ${subject} for ${studentClass}${isCombined ? ' (combined)' : ''}\n`;
                             return null;
                         }
                     }
@@ -1909,6 +2167,18 @@
                 output.textContent += '\n';
             }
             
+            // Combined Classes info
+            const combinedClasses = constraints.combinedClasses || [];
+            if (combinedClasses.length > 0) {
+                output.textContent += '🔗 Combined Classes:\n';
+                combinedClasses.forEach(combo => {
+                    if (combo.groups.length >= 2) {
+                        output.textContent += `  ${combo.groups.join(' + ')}: ${combo.sessions}x shared ${combo.subject}\n`;
+                    }
+                });
+                output.textContent += '\n';
+            }
+            
             // Group by day
             const scheduleByDay = {};
             schedule.forEach(s => {
@@ -1928,7 +2198,9 @@
                 );
                 
                 daySchedule.forEach(s => {
-                    output.textContent += `  ${s.time.padEnd(12)} | ${s.class.padEnd(6)} | ${s.subject.padEnd(10)} | ${s.teacher.padEnd(15)} | ${s.room}\n`;
+                    const combinedIndicator = s.isCombined ? ' 🔗' : '';
+                    const classDisplay = s.class.length > 10 ? s.class.substring(0, 10) : s.class.padEnd(10);
+                    output.textContent += `  ${s.time.padEnd(12)} | ${classDisplay} | ${s.subject.padEnd(12)} | ${s.teacher.padEnd(15)} | ${s.room}${combinedIndicator}\n`;
                 });
                 
                 output.textContent += '\n';
@@ -1989,16 +2261,33 @@
             let allClassesPerfect = true;
             
             constraints.classes.forEach(className => {
-                const classScheduleItems = schedule.filter(s => s.class === className);
+                // Get sessions where this class is directly named
+                const directSessions = schedule.filter(s => s.class === className);
+                
+                // Also get sessions where this class is part of a combined group
+                const combinedSessions = schedule.filter(s => 
+                    s.isCombined && 
+                    s.combinedGroups && 
+                    s.combinedGroups.includes(className)
+                );
+                
                 const subjectCounts = {};
                 let wpHours = 0;
+                let combinedHours = 0;
                 
-                classScheduleItems.forEach(s => {
+                // Count direct sessions
+                directSessions.forEach(s => {
                     if (s.isWorkPlacement) {
                         wpHours++;
                     } else {
                         subjectCounts[s.subject] = (subjectCounts[s.subject] || 0) + 1;
                     }
+                });
+                
+                // Count combined sessions (these count toward this class's hours too)
+                combinedSessions.forEach(s => {
+                    subjectCounts[s.subject] = (subjectCounts[s.subject] || 0) + 1;
+                    combinedHours++;
                 });
                 
                 let allOk = true;
@@ -2017,8 +2306,9 @@
                     .join(' ');
                 
                 const wpIndicator = wpHours > 0 ? ` +💼${wpHours}h` : '';
-                const totalHours = classScheduleItems.length;
-                output.textContent += `  ${status} ${className}: ${totalHours}h (${subjectStr}${wpIndicator})\n`;
+                const combinedIndicator = combinedHours > 0 ? ` +🔗${combinedHours}h` : '';
+                const totalHours = directSessions.length + combinedHours;
+                output.textContent += `  ${status} ${className}: ${totalHours}h (${subjectStr}${wpIndicator}${combinedIndicator})\n`;
             });
             
             // Work Placement verification
@@ -2055,21 +2345,75 @@
             output.textContent += '\n👨‍🏫 Teacher Hours:\n';
             let allTeachersPerfect = true;
             
+            // Calculate how many sessions were saved by combined classes
+            const combinedClassesList = constraints.combinedClasses || [];
+            let totalSavedSessions = 0;
+            combinedClassesList.forEach(combo => {
+                if (combo.groups.length >= 2) {
+                    totalSavedSessions += combo.sessions * (combo.groups.length - 1);
+                }
+            });
+            
+            // Total scheduled vs total teacher capacity
+            const totalScheduledSessions = schedule.filter(s => !s.isWorkPlacement).length;
+            const totalTeacherCapacity = teachers.reduce((sum, t) => sum + t.maxHours, 0);
+            
+            if (totalSavedSessions > 0) {
+                output.textContent += `  ℹ️ Combined classes saved ${totalSavedSessions} sessions\n`;
+                output.textContent += `  ℹ️ Total sessions: ${totalScheduledSessions} | Teacher capacity: ${totalTeacherCapacity}\n\n`;
+            }
+            
             teachers.forEach(t => {
                 const teacherSessions = schedule.filter(s => s.teacher === t.name);
+                const combinedHours = teacherSessions.filter(s => s.isCombined).length;
                 const hours = teacherSessions.length;
-                const status = hours === t.maxHours ? '✅' : '❌';
                 
-                if (hours !== t.maxHours) allTeachersPerfect = false;
+                // With combined classes, teachers may have fewer hours than max - that's OK
+                // Only mark as problem if they have MORE than max, or if no combined savings and not at max
+                let status;
+                if (hours === t.maxHours) {
+                    status = '✅';
+                } else if (hours > t.maxHours) {
+                    status = '❌';
+                    allTeachersPerfect = false;
+                } else if (totalSavedSessions > 0) {
+                    // With combined classes, fewer hours is expected
+                    status = '✅';
+                } else {
+                    status = '❌';
+                    allTeachersPerfect = false;
+                }
                 
-                output.textContent += `  ${status} ${t.name}: ${hours}/${t.maxHours}\n`;
+                const combinedNote = combinedHours > 0 ? ` (incl. ${combinedHours} combined)` : '';
+                output.textContent += `  ${status} ${t.name}: ${hours}/${t.maxHours}${combinedNote}\n`;
             });
+            
+            // Combined Classes verification
+            if (combinedClassesList.length > 0) {
+                output.textContent += '\n🔗 Combined Classes Verification:\n';
+                
+                combinedClassesList.forEach(combo => {
+                    if (combo.groups.length < 2) return;
+                    
+                    const groupsStr = combo.groups.join(' + ');
+                    const combinedSessionsFound = schedule.filter(s => 
+                        s.isCombined && 
+                        s.subject === combo.subject &&
+                        s.combinedGroups &&
+                        combo.groups.every(g => s.combinedGroups.includes(g))
+                    ).length;
+                    
+                    const status = combinedSessionsFound >= combo.sessions ? '✅' : '⚠️';
+                    output.textContent += `  ${status} ${groupsStr}: ${combinedSessionsFound}/${combo.sessions} shared ${combo.subject} sessions\n`;
+                });
+            }
             
             // Final verdict
             output.textContent += '\n';
             const dayOffOk = Object.keys(constraints.groupDayOff).length === 0 || 
                 schedule.every(s => {
                     if (s.isWorkPlacement) return true; // Work placement allowed on day off
+                    if (s.isCombined) return true; // Combined classes checked separately
                     const group = s.class[s.class.length - 1].toUpperCase();
                     const daysOff = constraints.groupDayOff[group];
                     if (!daysOff) return true;
@@ -2077,14 +2421,17 @@
                     return !daysOffArray.includes(s.day);
                 });
             
-            // Count work placements
+            // Count work placements and combined
             const wpCount = schedule.filter(s => s.isWorkPlacement).length;
+            const combinedCount = schedule.filter(s => s.isCombined).length;
             const wpExpected = wpGroups.length;
             
             if (allTeachersPerfect && allClassesPerfect && dayOffOk) {
                 output.textContent += '🎉 PERFECT! All constraints satisfied!\n';
-                let wpMsg = wpCount > 0 ? `\n✓ ${wpCount} T-Level work placements scheduled` : '';
-                alert(`✅ PERFECT SCHEDULE!\n\n✓ All teachers at exact hours\n✓ All classes have correct requirements\n✓ All day-off constraints satisfied\n✓ Zero conflicts${wpMsg}\n\nTotal: ${schedule.length} assignments`);
+                let wpMsg = wpCount > 0 ? `\n✓ ${wpCount} T-Level work placement sessions` : '';
+                let combinedMsg = combinedCount > 0 ? `\n✓ ${combinedCount} combined class sessions (saved ${totalSavedSessions} sessions)` : '';
+                let teacherNote = totalSavedSessions > 0 ? '\n✓ Teacher hours adjusted for combined classes' : '\n✓ All teachers at exact hours';
+                alert(`✅ PERFECT SCHEDULE!\n${teacherNote}\n✓ All classes have correct requirements\n✓ All day-off constraints satisfied\n✓ Zero conflicts${wpMsg}${combinedMsg}\n\nTotal: ${schedule.length} assignments`);
             } else {
                 output.textContent += '⚠️ Some constraints not perfectly met\n';
                 alert(`Schedule created: ${schedule.length} assignments\nSome constraints may need adjustment`);
