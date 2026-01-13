@@ -967,7 +967,7 @@
 
         function renderGroupsContainer() {
             const container = document.getElementById('groupsContainer');
-            const allFaculties = ['English', 'Maths', ...tempConstraints.faculty];
+            const allFaculties = [...tempConstraints.faculty];
             
             container.innerHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr 150px 180px 40px; gap: 10px; padding: 10px; background: #34495e; color: white; border-radius: 8px 8px 0 0; font-weight: 600; font-size: 13px;">
