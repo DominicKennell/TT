@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎯 Dynamic Perfect AI Scheduler</title>
+    <title>🎯 Dynamic Scheduler</title>
     <style>
         * {
             margin: 0;
@@ -569,7 +569,7 @@
             </div>
 
             <button class="btn btn-primary btn-large" id="generateBtn" onclick="generateSchedule()" disabled>
-                🎯 GENERATE PERFECT SCHEDULE
+                🎯 GENERATE SCHEDULE
             </button>
 
             <div class="btn-group" style="justify-content: center; margin-top: 16px;">
@@ -580,7 +580,7 @@
             <div style="margin-top: 24px;">
                 <h2>📅 Generated Schedule</h2>
                 <div class="schedule-output" id="scheduleOutput">
-                    Click "GENERATE PERFECT SCHEDULE" to create your schedule...
+                    Click "GENERATE SCHEDULE" to create your schedule...
                 </div>
             </div>
         </div>
@@ -1713,7 +1713,7 @@
                 schedule = result;
                 displaySchedule();
             } else {
-                output.textContent += '\n❌ Could not generate perfect schedule\n';
+                output.textContent += '\n❌ Could not generate schedule\n';
                 alert('Could not generate schedule. Please check constraints and teacher availability.');
             }
         }
@@ -1926,7 +1926,7 @@
             });
             
             // Step 2: Create schedule
-            output.textContent += '\n📅 Step 2: Creating Perfect Schedule...\n';
+            output.textContent += '\n📅 Step 2: Creating Schedule...\n';
             output.textContent += '-'.repeat(70) + '\n\n';
             
             const schedule = [];
@@ -3423,7 +3423,7 @@
 
         function displaySchedule() {
             const output = document.getElementById('scheduleOutput');
-            output.textContent = '🎯 PERFECT SCHEDULE GENERATED!\n';
+            output.textContent = '🎯 SCHEDULE GENERATED!\n';
             output.textContent += '='.repeat(80) + '\n\n';
             
             // Show constraints
@@ -3723,20 +3723,20 @@
             const wpExpected = wpGroups.length;
             
             if (allTeachersPerfect && allClassesPerfect && dayOffOk) {
-                output.textContent += '🎉 PERFECT! All constraints satisfied!\n';
+                output.textContent += '🎉 All constraints satisfied!\n';
                 let wpMsg = wpCount > 0 ? `\n✓ ${wpCount} T-Level work placement sessions` : '';
                 let combinedMsg = combinedCount > 0 ? `\n✓ ${combinedCount} combined class sessions (saved ${totalSavedSessions} sessions)` : '';
                 let teacherNote = totalSavedSessions > 0 ? '\n✓ Teacher hours adjusted for combined classes' : '\n✓ All teachers at exact hours';
-                alert(`✅ PERFECT SCHEDULE!\n${teacherNote}\n✓ All classes have correct requirements\n✓ All day-off constraints satisfied\n✓ Zero conflicts${wpMsg}${combinedMsg}\n\nTotal: ${schedule.length} assignments`);
+                alert(`✅ SCHEDULE!\n${teacherNote}\n✓ All classes have correct requirements\n✓ All day-off constraints satisfied\n✓ Zero conflicts${wpMsg}${combinedMsg}\n\nTotal: ${schedule.length} assignments`);
             } else {
-                output.textContent += '⚠️ Some constraints not perfectly met\n';
+                output.textContent += '⚠️ Some constraints not met\n';
                 alert(`Schedule created: ${schedule.length} assignments\nSome constraints may need adjustment`);
             }
         }
 
         function clearSchedule() {
             schedule = [];
-            document.getElementById('scheduleOutput').textContent = 'Click "GENERATE PERFECT SCHEDULE" to create your schedule...';
+            document.getElementById('scheduleOutput').textContent = 'Click "GENERATE SCHEDULE" to create your schedule...';
         }
 
         function exportToPDF() {
@@ -3750,7 +3750,7 @@
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Perfect Class Schedule</title>
+                    <title> Class Schedule</title>
                     <style>
                         body { font-family: Arial, sans-serif; padding: 20px; }
                         h1 { color: #667eea; text-align: center; }
@@ -3766,7 +3766,7 @@
                     </style>
                 </head>
                 <body>
-                    <h1>🎯 Perfect Class Schedule</h1>
+                    <h1>🎯 Class Schedule</h1>
                     <p style="text-align: center;">Generated: ${new Date().toLocaleString()}</p>
                     
                     <div class="summary">
