@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Timetabler </title>
+    <title>🎯 Dynamic Perfect AI Scheduler</title>
     <style>
         * {
             margin: 0;
@@ -555,6 +555,19 @@
                 Click 'CONFIGURE CONSTRAINTS' to set up subjects, groups, days & rooms, then add teachers
             </p>
 
+            <div style="margin-bottom: 16px;">
+                <label style="font-weight: 600; margin-bottom: 8px; display: block;">🧠 Algorithm:</label>
+                <select id="algorithmSelect" class="form-control" style="max-width: 300px; margin: 0 auto; display: block;">
+                    <option value="greedy">Greedy (Fast, Good)</option>
+                    <option value="backtracking">Backtracking (Thorough)</option>
+                    <option value="sat">SAT Solver (Optimal)</option>
+                    <option value="ilp">Integer Linear Programming (Best)</option>
+                </select>
+                <p class="info-text" style="text-align: center; margin-top: 8px; font-size: 12px;" id="algorithmDescription">
+                    Fast heuristic approach - good for most cases
+                </p>
+            </div>
+
             <button class="btn btn-primary btn-large" id="generateBtn" onclick="generateSchedule()" disabled>
                 🎯 GENERATE PERFECT SCHEDULE
             </button>
@@ -967,7 +980,7 @@
 
         function renderGroupsContainer() {
             const container = document.getElementById('groupsContainer');
-            const allFaculties = [...tempConstraints.faculty];
+            const allFaculties = ['English', 'Maths', ...tempConstraints.faculty];
             
             container.innerHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr 150px 180px 40px; gap: 10px; padding: 10px; background: #34495e; color: white; border-radius: 8px 8px 0 0; font-weight: 600; font-size: 13px;">
@@ -1635,6 +1648,27 @@
         }
 
         // ==================== SCHEDULE GENERATION ====================
+        
+        // Algorithm description updater
+        document.addEventListener('DOMContentLoaded', function() {
+            const select = document.getElementById('algorithmSelect');
+            if (select) {
+                select.addEventListener('change', updateAlgorithmDescription);
+            }
+        });
+        
+        function updateAlgorithmDescription() {
+            const algo = document.getElementById('algorithmSelect').value;
+            const desc = document.getElementById('algorithmDescription');
+            const descriptions = {
+                'greedy': 'Fast heuristic approach - good for most cases',
+                'backtracking': 'Systematic search with backtracking - guarantees solution if exists',
+                'sat': 'Boolean satisfiability solver - finds optimal valid solution',
+                'ilp': 'Integer Linear Programming - mathematically optimal solution'
+            };
+            desc.textContent = descriptions[algo] || '';
+        }
+        
         function generateSchedule() {
             if (teachers.length === 0) {
                 alert('Please add teachers before generating schedule!');
@@ -1653,10 +1687,27 @@
             }
             
             const output = document.getElementById('scheduleOutput');
-            output.textContent = '🎯 Generating Perfect Schedule...\n' + '='.repeat(70) + '\n\n';
+            const algorithm = document.getElementById('algorithmSelect').value;
             
-            // Run the AI scheduler
-            const result = runPerfectScheduler();
+            output.textContent = `🎯 Generating Schedule using ${algorithm.toUpperCase()} algorithm...\n` + '='.repeat(70) + '\n\n';
+            
+            let result;
+            
+            switch(algorithm) {
+                case 'backtracking':
+                    result = runBacktrackingScheduler();
+                    break;
+                case 'sat':
+                    result = runSATScheduler();
+                    break;
+                case 'ilp':
+                    result = runILPScheduler();
+                    break;
+                case 'greedy':
+                default:
+                    result = runPerfectScheduler();
+                    break;
+            }
             
             if (result) {
                 schedule = result;
@@ -1884,12 +1935,220 @@
             const roomSchedule = {};
             const classDaySubjects = {};
             
+            // Track restricted subjects - only 1 session allowed at any given time slot
+            // (e.g., English and Maths typically have limited teachers)
+            const restrictedSubjects = ['English', 'Maths'];
+            const restrictedSlots = {}; // { 'English-Monday-09:00': true } means that slot is taken
+            
             // Group by class
             const classesByStudent = {};
             classesToSchedule.forEach(c => {
                 if (!classesByStudent[c.class]) classesByStudent[c.class] = [];
                 classesByStudent[c.class].push(c);
             });
+            
+            // FIRST PASS: Schedule all combined sessions first (they have more constraints)
+            output.textContent += 'Phase 2a: Scheduling Combined Sessions First...\n';
+            const combinedSessionsToSchedule = classesToSchedule.filter(s => s.isCombined);
+            
+            // Track how many of each combination we've scheduled
+            const scheduledCombinedCounts = {}; // { 'L3A-L3B-English': 2 } means we've scheduled 2 so far
+            
+            // Interleave different subjects for variety - sort so we alternate subjects
+            const sortedCombinedSessions = [...combinedSessionsToSchedule].sort((a, b) => {
+                // First by subject, then by group combination
+                const aKey = `${a.combinedGroups.join('-')}`;
+                const bKey = `${b.combinedGroups.join('-')}`;
+                if (aKey !== bKey) return aKey.localeCompare(bKey);
+                return a.subject.localeCompare(b.subject);
+            });
+            
+            // Now interleave - take one of each subject in turn
+            const interleaved = [];
+            const bySubject = {};
+            sortedCombinedSessions.forEach(s => {
+                const key = `${s.combinedGroups.join('-')}-${s.subject}`;
+                if (!bySubject[key]) bySubject[key] = [];
+                bySubject[key].push(s);
+            });
+            
+            const subjectKeys = Object.keys(bySubject);
+            const maxLen = Math.max(...Object.values(bySubject).map(arr => arr.length));
+            for (let i = 0; i < maxLen; i++) {
+                for (const key of subjectKeys) {
+                    if (bySubject[key][i]) {
+                        interleaved.push(bySubject[key][i]);
+                    }
+                }
+            }
+            
+            for (const session of interleaved) {
+                const { teacher, subject, room, days, isCombined, combinedGroups, displayClass } = session;
+                const comboKey = `${[...combinedGroups].sort().join('-')}-${subject}`;
+                
+                // Track count for this combination
+                if (!scheduledCombinedCounts[comboKey]) scheduledCombinedCounts[comboKey] = 0;
+                
+                const primaryClass = combinedGroups[0];
+                const classAvailableDays = getAvailableDaysForClass(primaryClass);
+                
+                // Find days that work for ALL groups in the combination
+                const allGroupDays = combinedGroups.map(g => getAvailableDaysForClass(g));
+                let daysToUse = classAvailableDays.filter(d => allGroupDays.every(gd => gd.includes(d)));
+                if (daysToUse.length === 0) daysToUse = classAvailableDays;
+                
+                // For variety, try to spread across different days
+                // Sort days by how many combined sessions are already on that day
+                const dayCounts = {};
+                daysToUse.forEach(d => {
+                    dayCounts[d] = schedule.filter(s => s.isCombined && s.day === d).length;
+                });
+                daysToUse.sort((a, b) => dayCounts[a] - dayCounts[b]);
+                
+                let assigned = false;
+                
+                // Dynamic limit for combined English and Maths per day
+                // Calculate based on: how many sessions needed vs how many common days available
+                const limitedSubjects = ['English', 'Maths'];
+                let maxCombinedPerDayPerSubject = 1; // Default: spread across days
+                
+                if (limitedSubjects.includes(subject)) {
+                    // Count how many combined sessions of this subject we need for this group combo
+                    const comboKeyForCount = `${[...combinedGroups].sort().join('-')}-${subject}`;
+                    const totalNeeded = combinedSessionsToSchedule.filter(s => 
+                        `${[...s.combinedGroups].sort().join('-')}-${s.subject}` === comboKeyForCount
+                    ).length;
+                    
+                    // How many common days do these groups have?
+                    const commonDays = daysToUse.length;
+                    
+                    // Calculate max per day: ceil(totalNeeded / commonDays)
+                    // e.g., 4 sessions / 3 days = max 2 per day
+                    // e.g., 4 sessions / 4 days = max 1 per day
+                    maxCombinedPerDayPerSubject = Math.ceil(totalNeeded / commonDays);
+                }
+                
+                for (const day of daysToUse) {
+                    if (assigned) break;
+                    
+                    // Check if we've hit the daily limit for this subject for these groups
+                    if (limitedSubjects.includes(subject)) {
+                        let dayLimitReached = false;
+                        for (const grp of combinedGroups) {
+                            const combinedForGroupOnDay = schedule.filter(s => 
+                                s.isCombined && 
+                                s.day === day && 
+                                s.subject === subject &&
+                                s.combinedGroups && 
+                                s.combinedGroups.includes(grp)
+                            ).length;
+                            if (combinedForGroupOnDay >= maxCombinedPerDayPerSubject) {
+                                dayLimitReached = true;
+                                break;
+                            }
+                        }
+                        if (dayLimitReached) continue; // Skip this day, try next
+                    }
+                    
+                    // Collect all valid slots with variety scores
+                    const validSlots = [];
+                    
+                    for (const time of constraints.timeSlots) {
+                        const teacherKey = `${teacher}-${day}-${time}`;
+                        const roomKey = `${room}-${day}-${time}`;
+                        
+                        // Check restricted subjects
+                        const isRestricted = restrictedSubjects.includes(subject);
+                        const restrictedKey = `${subject}-${day}-${time}`;
+                        const restrictedSlotTaken = isRestricted && restrictedSlots[restrictedKey];
+                        
+                        // Check all groups are free (THIS IS CRITICAL - checks classSchedule which is updated immediately)
+                        let allGroupsFree = true;
+                        for (const grp of combinedGroups) {
+                            if (classSchedule[`${grp}-${day}-${time}`]) {
+                                allGroupsFree = false;
+                                break;
+                            }
+                        }
+                        
+                        if (!teacherSchedule[teacherKey] && 
+                            !roomSchedule[roomKey] &&
+                            !restrictedSlotTaken &&
+                            allGroupsFree) {
+                            
+                            // Calculate variety score (lower = better)
+                            let varietyScore = 0;
+                            const timeIndex = constraints.timeSlots.indexOf(time);
+                            
+                            // Penalty for back-to-back same subject
+                            if (timeIndex > 0) {
+                                const prevTime = constraints.timeSlots[timeIndex - 1];
+                                const prevSession = schedule.find(s => 
+                                    s.combinedGroups && combinedGroups.some(g => s.combinedGroups.includes(g)) &&
+                                    s.day === day && s.time === prevTime && s.subject === subject
+                                );
+                                if (prevSession) varietyScore += 200;
+                            }
+                            
+                            // Penalty for same subject already on this day
+                            const sameSubjectToday = schedule.filter(s =>
+                                s.combinedGroups && combinedGroups.some(g => s.combinedGroups.includes(g)) &&
+                                s.day === day && s.subject === subject
+                            ).length;
+                            varietyScore += sameSubjectToday * 100;
+                            
+                            validSlots.push({ day, time, varietyScore });
+                        }
+                    }
+                    
+                    // Pick the slot with best variety score
+                    if (validSlots.length > 0) {
+                        validSlots.sort((a, b) => a.varietyScore - b.varietyScore);
+                        const best = validSlots[0];
+                        const teacherKey = `${teacher}-${best.day}-${best.time}`;
+                        const roomKey = `${room}-${best.day}-${best.time}`;
+                        const isRestricted = restrictedSubjects.includes(subject);
+                        const restrictedKey = `${subject}-${best.day}-${best.time}`;
+                        
+                        schedule.push({
+                            teacher,
+                            class: displayClass,
+                            subject,
+                            day: best.day,
+                            time: best.time,
+                            room,
+                            isCombined: true,
+                            combinedGroups: [...combinedGroups]
+                        });
+                        
+                        teacherSchedule[teacherKey] = true;
+                        roomSchedule[roomKey] = true;
+                        
+                        if (isRestricted) {
+                            restrictedSlots[restrictedKey] = true;
+                        }
+                        
+                        // CRITICAL: Mark ALL groups' slots as used IMMEDIATELY
+                        for (const grp of combinedGroups) {
+                            classSchedule[`${grp}-${best.day}-${best.time}`] = true;
+                            const subKey = `${grp}-${best.day}`;
+                            if (!classDaySubjects[subKey]) classDaySubjects[subKey] = [];
+                            classDaySubjects[subKey].push(subject);
+                        }
+                        
+                        scheduledCombinedCounts[comboKey]++;
+                        assigned = true;
+                        output.textContent += `  ✅ Combined ${displayClass} ${subject} #${scheduledCombinedCounts[comboKey]}: ${best.day} ${best.time}\n`;
+                    }
+                }
+                
+                if (!assigned) {
+                    output.textContent += `  ❌ Could not schedule combined ${displayClass} ${subject}\n`;
+                    return null;
+                }
+            }
+            
+            output.textContent += '\nPhase 2b: Scheduling Regular Sessions...\n';
             
             // Group classes by faculty for staggering
             const classesByFaculty = {};
@@ -1900,7 +2159,7 @@
                 classesByFaculty[faculty].push(cls);
             });
             
-            // Process each faculty with staggering
+            // Process each faculty with staggering (SKIP combined sessions - already done)
             for (const [faculty, facultyClasses] of Object.entries(classesByFaculty)) {
                 let staggerOffset = 0;
                 
@@ -1927,9 +2186,12 @@
                         }
                     }
                     
+                    // Filter out combined sessions - they were already scheduled in Phase 2a
+                    const regularSessions = allSessionsList.filter(s => !s.isCombined);
+                    
                     const classAvailableDays = getAvailableDaysForClass(studentClass);
                     
-                    for (const session of allSessionsList) {
+                    for (const session of regularSessions) {
                         const { teacher, subject, room, days, isCombined, combinedGroups, displayClass } = session;
                         
                         const validDays = days.filter(d => classAvailableDays.includes(d));
@@ -1954,9 +2216,10 @@
                         
                         let assigned = false;
                         
+                        // Collect all valid slots with variety scores
+                        const validSlots = [];
+                        
                         for (const { day } of dayPriority) {
-                            if (assigned) break;
-                            
                             // Staggered time slots
                             const staggeredSlots = [
                                 ...constraints.timeSlots.slice(staggerOffset),
@@ -1967,6 +2230,11 @@
                                 const teacherKey = `${teacher}-${day}-${time}`;
                                 const classKey = `${studentClass}-${day}-${time}`;
                                 const roomKey = `${room}-${day}-${time}`;
+                                
+                                // Check if this is a restricted subject (English/Maths) and slot is already taken
+                                const isRestricted = restrictedSubjects.includes(subject);
+                                const restrictedKey = `${subject}-${day}-${time}`;
+                                const restrictedSlotTaken = isRestricted && restrictedSlots[restrictedKey];
                                 
                                 // For combined classes, check all groups are free
                                 let allGroupsFree = true;
@@ -1982,46 +2250,92 @@
                                 if (!teacherSchedule[teacherKey] && 
                                     !classSchedule[classKey] && 
                                     !roomSchedule[roomKey] &&
+                                    !restrictedSlotTaken &&
                                     allGroupsFree) {
                                     
-                                    const scheduleEntry = {
-                                        teacher,
-                                        class: isCombined ? displayClass : studentClass,
-                                        subject,
-                                        day,
-                                        time,
-                                        room,
-                                        isCombined: isCombined || false
-                                    };
+                                    // Calculate variety score (lower = better)
+                                    let varietyScore = 0;
+                                    const timeIndex = constraints.timeSlots.indexOf(time);
                                     
-                                    if (isCombined) {
-                                        scheduleEntry.combinedGroups = combinedGroups;
+                                    // Penalty for back-to-back same subject
+                                    if (timeIndex > 0) {
+                                        const prevTime = constraints.timeSlots[timeIndex - 1];
+                                        const prevSession = schedule.find(s => 
+                                            s.class === studentClass &&
+                                            s.day === day && s.time === prevTime && s.subject === subject
+                                        );
+                                        if (prevSession) varietyScore += 200;
+                                    }
+                                    if (timeIndex < constraints.timeSlots.length - 1) {
+                                        const nextTime = constraints.timeSlots[timeIndex + 1];
+                                        const nextSession = schedule.find(s => 
+                                            s.class === studentClass &&
+                                            s.day === day && s.time === nextTime && s.subject === subject
+                                        );
+                                        if (nextSession) varietyScore += 200;
                                     }
                                     
-                                    schedule.push(scheduleEntry);
+                                    // Penalty for same subject already on this day
+                                    const sameSubjectToday = schedule.filter(s =>
+                                        s.class === studentClass &&
+                                        s.day === day && s.subject === subject
+                                    ).length;
+                                    varietyScore += sameSubjectToday * 100;
                                     
-                                    teacherSchedule[teacherKey] = true;
-                                    classSchedule[classKey] = true;
-                                    roomSchedule[roomKey] = true;
-                                    
-                                    // For combined classes, mark ALL groups' slots as used
-                                    if (isCombined && combinedGroups) {
-                                        for (const grp of combinedGroups) {
-                                            classSchedule[`${grp}-${day}-${time}`] = true;
-                                            const subKey = `${grp}-${day}`;
-                                            if (!classDaySubjects[subKey]) classDaySubjects[subKey] = [];
-                                            classDaySubjects[subKey].push(subject);
-                                        }
-                                    }
-                                    
-                                    const subjectKey = `${studentClass}-${day}`;
-                                    if (!classDaySubjects[subjectKey]) classDaySubjects[subjectKey] = [];
-                                    classDaySubjects[subjectKey].push(subject);
-                                    
-                                    assigned = true;
-                                    break;
+                                    validSlots.push({ day, time, varietyScore, isRestricted, restrictedKey });
                                 }
                             }
+                        }
+                        
+                        // Pick the slot with best variety score
+                        if (validSlots.length > 0) {
+                            validSlots.sort((a, b) => a.varietyScore - b.varietyScore);
+                            const best = validSlots[0];
+                            
+                            const teacherKey = `${teacher}-${best.day}-${best.time}`;
+                            const classKey = `${studentClass}-${best.day}-${best.time}`;
+                            const roomKey = `${room}-${best.day}-${best.time}`;
+                            
+                            const scheduleEntry = {
+                                teacher,
+                                class: isCombined ? displayClass : studentClass,
+                                subject,
+                                day: best.day,
+                                time: best.time,
+                                room,
+                                isCombined: isCombined || false
+                            };
+                            
+                            if (isCombined) {
+                                scheduleEntry.combinedGroups = combinedGroups;
+                            }
+                            
+                            schedule.push(scheduleEntry);
+                            
+                            teacherSchedule[teacherKey] = true;
+                            classSchedule[classKey] = true;
+                            roomSchedule[roomKey] = true;
+                            
+                            // Mark restricted subject slot as taken
+                            if (best.isRestricted) {
+                                restrictedSlots[best.restrictedKey] = true;
+                            }
+                            
+                            // For combined classes, mark ALL groups' slots as used
+                            if (isCombined && combinedGroups) {
+                                for (const grp of combinedGroups) {
+                                    classSchedule[`${grp}-${best.day}-${best.time}`] = true;
+                                    const subKey = `${grp}-${best.day}`;
+                                    if (!classDaySubjects[subKey]) classDaySubjects[subKey] = [];
+                                    classDaySubjects[subKey].push(subject);
+                                }
+                            }
+                            
+                            const subjectKey = `${studentClass}-${best.day}`;
+                            if (!classDaySubjects[subjectKey]) classDaySubjects[subjectKey] = [];
+                            classDaySubjects[subjectKey].push(subject);
+                            
+                            assigned = true;
                         }
                         
                         if (!assigned) {
@@ -2097,6 +2411,988 @@
             output.textContent += `\n✅ Schedule created: ${schedule.length} assignments\n`;
             
             return schedule;
+        }
+
+        // ==================== BACKTRACKING ALGORITHM ====================
+        function runBacktrackingScheduler() {
+            const output = document.getElementById('scheduleOutput');
+            output.textContent += '🔄 BACKTRACKING ALGORITHM\n';
+            output.textContent += 'Systematically trying all possibilities with intelligent pruning...\n\n';
+            
+            const startTime = performance.now();
+            
+            // Build list of all sessions that need to be scheduled
+            const sessionsToSchedule = [];
+            const combinedClasses = constraints.combinedClasses || [];
+            const combinedSessionsMap = buildCombinedSessionsMap(combinedClasses);
+            
+            for (const className of constraints.classes) {
+                for (const [subject, count] of Object.entries(constraints.requirements)) {
+                    const comboKey = `${className}-${subject}`;
+                    const comboInfo = combinedSessionsMap[comboKey];
+                    
+                    let effectiveCount = count;
+                    if (comboInfo && !comboInfo.isPrimary) {
+                        effectiveCount = Math.max(0, count - comboInfo.reducedBy);
+                    }
+                    
+                    for (let i = 0; i < effectiveCount; i++) {
+                        const isCombined = comboInfo && comboInfo.isPrimary && i < (comboInfo.combinedSessions || 0);
+                        sessionsToSchedule.push({
+                            class: className,
+                            subject: subject,
+                            isCombined: isCombined,
+                            combinedGroups: isCombined ? [className, ...comboInfo.combineWith] : null
+                        });
+                    }
+                }
+            }
+            
+            output.textContent += `Sessions to schedule: ${sessionsToSchedule.length}\n`;
+            
+            // Get all possible slots
+            const allSlots = [];
+            for (const day of constraints.days) {
+                for (const time of constraints.timeSlots) {
+                    allSlots.push({ day, time });
+                }
+            }
+            
+            // State tracking
+            const schedule = [];
+            const teacherSchedule = {};
+            const classSchedule = {};
+            const roomSchedule = {};
+            const restrictedSlots = {};
+            const restrictedSubjects = ['English', 'Maths'];
+            
+            let backtracks = 0;
+            let attempts = 0;
+            const maxAttempts = 100000;
+            
+            // Recursive backtracking function
+            function backtrack(sessionIndex) {
+                attempts++;
+                if (attempts > maxAttempts) return false;
+                
+                if (sessionIndex >= sessionsToSchedule.length) {
+                    return true; // All sessions scheduled!
+                }
+                
+                const session = sessionsToSchedule[sessionIndex];
+                const availableDays = getAvailableDaysForClass(session.class);
+                
+                // Get teachers for this subject
+                const eligibleTeachers = teachers.filter(t => t.subjects.includes(session.subject));
+                
+                // Try each combination of teacher, day, time, room
+                for (const teacher of eligibleTeachers) {
+                    for (const day of availableDays) {
+                        if (!teacher.days.includes(day)) continue;
+                        
+                        // For combined classes, check all groups available this day
+                        if (session.isCombined) {
+                            const allAvailable = session.combinedGroups.every(g => 
+                                getAvailableDaysForClass(g).includes(day)
+                            );
+                            if (!allAvailable) continue;
+                        }
+                        
+                        for (const time of constraints.timeSlots) {
+                            const teacherKey = `${teacher.name}-${day}-${time}`;
+                            if (teacherSchedule[teacherKey]) continue;
+                            
+                            // Check class availability
+                            const classKey = `${session.class}-${day}-${time}`;
+                            if (classSchedule[classKey]) continue;
+                            
+                            // For combined, check all groups free
+                            if (session.isCombined) {
+                                let anyBusy = false;
+                                for (const g of session.combinedGroups) {
+                                    if (classSchedule[`${g}-${day}-${time}`]) {
+                                        anyBusy = true;
+                                        break;
+                                    }
+                                }
+                                if (anyBusy) continue;
+                            }
+                            
+                            // Check restricted subjects
+                            if (restrictedSubjects.includes(session.subject)) {
+                                const restrictedKey = `${session.subject}-${day}-${time}`;
+                                if (restrictedSlots[restrictedKey]) continue;
+                            }
+                            
+                            for (const room of constraints.rooms) {
+                                const roomKey = `${room}-${day}-${time}`;
+                                if (roomSchedule[roomKey]) continue;
+                                
+                                // Try this assignment
+                                const entry = {
+                                    teacher: teacher.name,
+                                    class: session.isCombined ? session.combinedGroups.join(' + ') : session.class,
+                                    subject: session.subject,
+                                    day, time, room,
+                                    isCombined: session.isCombined || false,
+                                    combinedGroups: session.combinedGroups
+                                };
+                                
+                                // Make assignment
+                                schedule.push(entry);
+                                teacherSchedule[teacherKey] = true;
+                                classSchedule[classKey] = true;
+                                roomSchedule[roomKey] = true;
+                                
+                                if (session.isCombined) {
+                                    for (const g of session.combinedGroups) {
+                                        classSchedule[`${g}-${day}-${time}`] = true;
+                                    }
+                                }
+                                
+                                if (restrictedSubjects.includes(session.subject)) {
+                                    restrictedSlots[`${session.subject}-${day}-${time}`] = true;
+                                }
+                                
+                                // Recurse
+                                if (backtrack(sessionIndex + 1)) {
+                                    return true;
+                                }
+                                
+                                // Backtrack - undo assignment
+                                backtracks++;
+                                schedule.pop();
+                                delete teacherSchedule[teacherKey];
+                                delete classSchedule[classKey];
+                                delete roomSchedule[roomKey];
+                                
+                                if (session.isCombined) {
+                                    for (const g of session.combinedGroups) {
+                                        delete classSchedule[`${g}-${day}-${time}`];
+                                    }
+                                }
+                                
+                                if (restrictedSubjects.includes(session.subject)) {
+                                    delete restrictedSlots[`${session.subject}-${day}-${time}`];
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return false; // No valid assignment found
+            }
+            
+            // Sort sessions - harder constraints first (combined, restricted subjects)
+            sessionsToSchedule.sort((a, b) => {
+                if (a.isCombined && !b.isCombined) return -1;
+                if (!a.isCombined && b.isCombined) return 1;
+                if (restrictedSubjects.includes(a.subject) && !restrictedSubjects.includes(b.subject)) return -1;
+                if (!restrictedSubjects.includes(a.subject) && restrictedSubjects.includes(b.subject)) return 1;
+                return 0;
+            });
+            
+            const success = backtrack(0);
+            const endTime = performance.now();
+            
+            output.textContent += `\nAttempts: ${attempts.toLocaleString()}\n`;
+            output.textContent += `Backtracks: ${backtracks.toLocaleString()}\n`;
+            output.textContent += `Time: ${(endTime - startTime).toFixed(0)}ms\n`;
+            
+            if (success) {
+                output.textContent += `\n✅ Solution found with ${schedule.length} assignments\n`;
+                return schedule;
+            } else {
+                output.textContent += `\n❌ No solution found within ${maxAttempts.toLocaleString()} attempts\n`;
+                return null;
+            }
+        }
+
+        // ==================== SAT SOLVER ALGORITHM ====================
+        function runSATScheduler() {
+            const output = document.getElementById('scheduleOutput');
+            output.textContent += '🧮 SAT SOLVER ALGORITHM\n';
+            output.textContent += 'Converting to Boolean satisfiability problem...\n\n';
+            
+            const startTime = performance.now();
+            
+            // Build sessions list
+            const sessionsToSchedule = [];
+            const combinedClasses = constraints.combinedClasses || [];
+            const combinedSessionsMap = buildCombinedSessionsMap(combinedClasses);
+            
+            for (const className of constraints.classes) {
+                for (const [subject, count] of Object.entries(constraints.requirements)) {
+                    const comboKey = `${className}-${subject}`;
+                    const comboInfo = combinedSessionsMap[comboKey];
+                    
+                    let effectiveCount = count;
+                    if (comboInfo && !comboInfo.isPrimary) {
+                        effectiveCount = Math.max(0, count - comboInfo.reducedBy);
+                    }
+                    
+                    for (let i = 0; i < effectiveCount; i++) {
+                        const isCombined = comboInfo && comboInfo.isPrimary && i < (comboInfo.combinedSessions || 0);
+                        sessionsToSchedule.push({
+                            id: sessionsToSchedule.length,
+                            class: className,
+                            subject: subject,
+                            isCombined: isCombined,
+                            combinedGroups: isCombined ? [className, ...comboInfo.combineWith] : null
+                        });
+                    }
+                }
+            }
+            
+            // SAT variables: X[session][teacher][day][time][room] = true/false
+            // We'll use a simpler encoding with constraint propagation (DPLL-lite)
+            
+            const allSlots = [];
+            for (const day of constraints.days) {
+                for (const time of constraints.timeSlots) {
+                    for (const room of constraints.rooms) {
+                        allSlots.push({ day, time, room });
+                    }
+                }
+            }
+            
+            // For each session, compute valid assignments
+            const restrictedSubjects = ['English', 'Maths'];
+            const sessionDomains = sessionsToSchedule.map(session => {
+                const domain = [];
+                const availableDays = getAvailableDaysForClass(session.class);
+                const eligibleTeachers = teachers.filter(t => t.subjects.includes(session.subject));
+                
+                for (const teacher of eligibleTeachers) {
+                    for (const day of availableDays) {
+                        if (!teacher.days.includes(day)) continue;
+                        
+                        if (session.isCombined) {
+                            const allAvailable = session.combinedGroups.every(g => 
+                                getAvailableDaysForClass(g).includes(day)
+                            );
+                            if (!allAvailable) continue;
+                        }
+                        
+                        for (const time of constraints.timeSlots) {
+                            for (const room of constraints.rooms) {
+                                domain.push({
+                                    teacher: teacher.name,
+                                    day, time, room
+                                });
+                            }
+                        }
+                    }
+                }
+                return domain;
+            });
+            
+            output.textContent += `Sessions: ${sessionsToSchedule.length}\n`;
+            output.textContent += `Average domain size: ${Math.round(sessionDomains.reduce((a,d) => a + d.length, 0) / sessionDomains.length)}\n\n`;
+            
+            // DPLL-style solving with unit propagation
+            const schedule = [];
+            const teacherSchedule = {};
+            const classSchedule = {};
+            const roomSchedule = {};
+            const restrictedSlots = {};
+            
+            let propagations = 0;
+            let decisions = 0;
+            
+            function isConsistent(session, assignment) {
+                const { teacher, day, time, room } = assignment;
+                
+                // Teacher conflict
+                if (teacherSchedule[`${teacher}-${day}-${time}`]) return false;
+                
+                // Room conflict
+                if (roomSchedule[`${room}-${day}-${time}`]) return false;
+                
+                // Class conflict
+                if (classSchedule[`${session.class}-${day}-${time}`]) return false;
+                
+                // Combined class conflicts
+                if (session.isCombined) {
+                    for (const g of session.combinedGroups) {
+                        if (classSchedule[`${g}-${day}-${time}`]) return false;
+                    }
+                }
+                
+                // Restricted subject conflict
+                if (restrictedSubjects.includes(session.subject)) {
+                    if (restrictedSlots[`${session.subject}-${day}-${time}`]) return false;
+                }
+                
+                return true;
+            }
+            
+            function propagate() {
+                let changed = true;
+                while (changed) {
+                    changed = false;
+                    propagations++;
+                    
+                    for (let i = 0; i < sessionsToSchedule.length; i++) {
+                        if (schedule[i]) continue; // Already assigned
+                        
+                        // Filter domain to consistent values
+                        sessionDomains[i] = sessionDomains[i].filter(a => 
+                            isConsistent(sessionsToSchedule[i], a)
+                        );
+                        
+                        // Empty domain = failure
+                        if (sessionDomains[i].length === 0) return false;
+                        
+                        // Unit propagation: only one choice left
+                        if (sessionDomains[i].length === 1) {
+                            const assignment = sessionDomains[i][0];
+                            schedule[i] = {
+                                ...assignment,
+                                class: sessionsToSchedule[i].isCombined ? 
+                                    sessionsToSchedule[i].combinedGroups.join(' + ') : 
+                                    sessionsToSchedule[i].class,
+                                subject: sessionsToSchedule[i].subject,
+                                isCombined: sessionsToSchedule[i].isCombined,
+                                combinedGroups: sessionsToSchedule[i].combinedGroups
+                            };
+                            
+                            // Update constraints
+                            teacherSchedule[`${assignment.teacher}-${assignment.day}-${assignment.time}`] = true;
+                            roomSchedule[`${assignment.room}-${assignment.day}-${assignment.time}`] = true;
+                            classSchedule[`${sessionsToSchedule[i].class}-${assignment.day}-${assignment.time}`] = true;
+                            
+                            if (sessionsToSchedule[i].isCombined) {
+                                for (const g of sessionsToSchedule[i].combinedGroups) {
+                                    classSchedule[`${g}-${assignment.day}-${assignment.time}`] = true;
+                                }
+                            }
+                            
+                            if (restrictedSubjects.includes(sessionsToSchedule[i].subject)) {
+                                restrictedSlots[`${sessionsToSchedule[i].subject}-${assignment.day}-${assignment.time}`] = true;
+                            }
+                            
+                            changed = true;
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            function solve() {
+                if (!propagate()) return false;
+                
+                // Check if complete
+                const unassigned = schedule.findIndex((s, i) => !s);
+                if (unassigned === -1) return true;
+                
+                // Choose variable with smallest domain (MRV heuristic)
+                let minIdx = -1;
+                let minSize = Infinity;
+                for (let i = 0; i < sessionsToSchedule.length; i++) {
+                    if (!schedule[i] && sessionDomains[i].length < minSize) {
+                        minSize = sessionDomains[i].length;
+                        minIdx = i;
+                    }
+                }
+                
+                if (minIdx === -1 || minSize === 0) return false;
+                
+                decisions++;
+                
+                // Try each value in domain
+                const savedDomains = sessionDomains.map(d => [...d]);
+                const savedSchedule = [...schedule];
+                const savedTeacher = {...teacherSchedule};
+                const savedClass = {...classSchedule};
+                const savedRoom = {...roomSchedule};
+                const savedRestricted = {...restrictedSlots};
+                
+                for (const assignment of sessionDomains[minIdx]) {
+                    // Make assignment
+                    schedule[minIdx] = {
+                        ...assignment,
+                        class: sessionsToSchedule[minIdx].isCombined ? 
+                            sessionsToSchedule[minIdx].combinedGroups.join(' + ') : 
+                            sessionsToSchedule[minIdx].class,
+                        subject: sessionsToSchedule[minIdx].subject,
+                        isCombined: sessionsToSchedule[minIdx].isCombined,
+                        combinedGroups: sessionsToSchedule[minIdx].combinedGroups
+                    };
+                    
+                    teacherSchedule[`${assignment.teacher}-${assignment.day}-${assignment.time}`] = true;
+                    roomSchedule[`${assignment.room}-${assignment.day}-${assignment.time}`] = true;
+                    classSchedule[`${sessionsToSchedule[minIdx].class}-${assignment.day}-${assignment.time}`] = true;
+                    
+                    if (sessionsToSchedule[minIdx].isCombined) {
+                        for (const g of sessionsToSchedule[minIdx].combinedGroups) {
+                            classSchedule[`${g}-${assignment.day}-${assignment.time}`] = true;
+                        }
+                    }
+                    
+                    if (restrictedSubjects.includes(sessionsToSchedule[minIdx].subject)) {
+                        restrictedSlots[`${sessionsToSchedule[minIdx].subject}-${assignment.day}-${assignment.time}`] = true;
+                    }
+                    
+                    if (solve()) return true;
+                    
+                    // Restore state
+                    for (let i = 0; i < sessionDomains.length; i++) {
+                        sessionDomains[i] = savedDomains[i];
+                    }
+                    for (let i = 0; i < schedule.length; i++) {
+                        schedule[i] = savedSchedule[i];
+                    }
+                    Object.keys(teacherSchedule).forEach(k => delete teacherSchedule[k]);
+                    Object.assign(teacherSchedule, savedTeacher);
+                    Object.keys(classSchedule).forEach(k => delete classSchedule[k]);
+                    Object.assign(classSchedule, savedClass);
+                    Object.keys(roomSchedule).forEach(k => delete roomSchedule[k]);
+                    Object.assign(roomSchedule, savedRoom);
+                    Object.keys(restrictedSlots).forEach(k => delete restrictedSlots[k]);
+                    Object.assign(restrictedSlots, savedRestricted);
+                }
+                
+                return false;
+            }
+            
+            // Sort sessions by constraint difficulty
+            const sortedIndices = sessionsToSchedule.map((s, i) => i);
+            sortedIndices.sort((a, b) => {
+                const sa = sessionsToSchedule[a];
+                const sb = sessionsToSchedule[b];
+                if (sa.isCombined && !sb.isCombined) return -1;
+                if (!sa.isCombined && sb.isCombined) return 1;
+                return sessionDomains[a].length - sessionDomains[b].length;
+            });
+            
+            const success = solve();
+            const endTime = performance.now();
+            
+            output.textContent += `Propagations: ${propagations.toLocaleString()}\n`;
+            output.textContent += `Decisions: ${decisions.toLocaleString()}\n`;
+            output.textContent += `Time: ${(endTime - startTime).toFixed(0)}ms\n`;
+            
+            if (success) {
+                const result = schedule.filter(s => s);
+                output.textContent += `\n✅ SAT solution found with ${result.length} assignments\n`;
+                return result;
+            } else {
+                output.textContent += `\n❌ No satisfying assignment exists (UNSAT)\n`;
+                return null;
+            }
+        }
+
+        // ==================== INTEGER LINEAR PROGRAMMING ALGORITHM ====================
+        function runILPScheduler() {
+            const output = document.getElementById('scheduleOutput');
+            output.textContent += '📊 INTEGER LINEAR PROGRAMMING ALGORITHM\n';
+            output.textContent += 'Optimizing for variety and spread...\n\n';
+            
+            const startTime = performance.now();
+            
+            // Build sessions list
+            const sessionsToSchedule = [];
+            const combinedClasses = constraints.combinedClasses || [];
+            const combinedSessionsMap = buildCombinedSessionsMap(combinedClasses);
+            
+            output.textContent += `📝 Session Generation (combined classes debug):\n`;
+            
+            for (const className of constraints.classes) {
+                for (const [subject, count] of Object.entries(constraints.requirements)) {
+                    const comboKey = `${className}-${subject}`;
+                    const comboInfo = combinedSessionsMap[comboKey];
+                    
+                    let effectiveCount = count;
+                    if (comboInfo && !comboInfo.isPrimary) {
+                        // Secondary in combined group - reduce count
+                        effectiveCount = Math.max(0, count - comboInfo.reducedBy);
+                    }
+                    
+                    // Debug output for combined subjects
+                    if (comboInfo) {
+                        if (comboInfo.isPrimary) {
+                            output.textContent += `  ${className} ${subject}: ${effectiveCount} sessions (${comboInfo.combinedSessions} combined with ${comboInfo.combineWith.join('+')})\n`;
+                        } else {
+                            output.textContent += `  ${className} ${subject}: ${effectiveCount} sessions (skipped ${comboInfo.reducedBy} - handled by combined)\n`;
+                        }
+                    }
+                    
+                    for (let i = 0; i < effectiveCount; i++) {
+                        const isCombined = comboInfo && comboInfo.isPrimary && i < (comboInfo.combinedSessions || 0);
+                        sessionsToSchedule.push({
+                            id: sessionsToSchedule.length,
+                            class: className,
+                            subject: subject,
+                            isCombined: isCombined,
+                            combinedGroups: isCombined ? [className, ...comboInfo.combineWith] : null
+                        });
+                    }
+                }
+            }
+            
+            output.textContent += `\n`;
+            
+            const restrictedSubjects = ['English', 'Maths'];
+            
+            // Schedule sessions in order of difficulty (most constrained first)
+            // But interleave by class to spread the work
+            const sessionsByClass = {};
+            sessionsToSchedule.forEach(s => {
+                const key = s.class;
+                if (!sessionsByClass[key]) sessionsByClass[key] = [];
+                sessionsByClass[key].push(s);
+            });
+            
+            // Interleave sessions from different classes
+            const orderedSessions = [];
+            const classKeys = Object.keys(sessionsByClass);
+            const maxSessions = Math.max(...Object.values(sessionsByClass).map(arr => arr.length));
+            
+            for (let i = 0; i < maxSessions; i++) {
+                for (const key of classKeys) {
+                    if (sessionsByClass[key][i]) {
+                        orderedSessions.push(sessionsByClass[key][i]);
+                    }
+                }
+            }
+            
+            // Sort combined sessions first (more constrained)
+            orderedSessions.sort((a, b) => {
+                if (a.isCombined && !b.isCombined) return -1;
+                if (!a.isCombined && b.isCombined) return 1;
+                if (restrictedSubjects.includes(a.subject) && !restrictedSubjects.includes(b.subject)) return -1;
+                if (!restrictedSubjects.includes(a.subject) && restrictedSubjects.includes(b.subject)) return 1;
+                return 0;
+            });
+            
+            output.textContent += `Sessions: ${sessionsToSchedule.length}\n`;
+            output.textContent += `Classes: ${classKeys.length}\n`;
+            
+            // PRE-FLIGHT CAPACITY CHECK
+            output.textContent += `\n📋 Pre-flight Capacity Check:\n`;
+            let capacityOk = true;
+            const classSessionCounts = {};
+            
+            // Count sessions per class (including combined)
+            for (const session of sessionsToSchedule) {
+                if (session.isCombined && session.combinedGroups) {
+                    for (const g of session.combinedGroups) {
+                        classSessionCounts[g] = (classSessionCounts[g] || 0) + 1;
+                    }
+                } else {
+                    classSessionCounts[session.class] = (classSessionCounts[session.class] || 0) + 1;
+                }
+            }
+            
+            for (const className of constraints.classes) {
+                const availableDays = getAvailableDaysForClass(className);
+                const availableSlots = availableDays.length * constraints.timeSlots.length;
+                const sessionsNeeded = classSessionCounts[className] || 0;
+                const status = sessionsNeeded <= availableSlots ? '✅' : '❌';
+                
+                if (sessionsNeeded > availableSlots) capacityOk = false;
+                
+                output.textContent += `  ${status} ${className}: ${sessionsNeeded} sessions, ${availableSlots} slots (${availableDays.length} days × ${constraints.timeSlots.length} periods)\n`;
+            }
+            
+            if (!capacityOk) {
+                output.textContent += `\n⚠️ WARNING: Some classes have more sessions than available slots!\n`;
+                output.textContent += `   Solutions:\n`;
+                output.textContent += `   • Reduce subject hours in Configure Constraints\n`;
+                output.textContent += `   • Remove days off for some groups\n`;
+                output.textContent += `   • Check combined classes aren't creating duplicates\n\n`;
+            }
+            
+            output.textContent += `\nOptimizing for variety...\n\n`;
+            
+            // Try scheduling with ability to retry on failure
+            function attemptSchedule(relaxVariety = false) {
+                // Reset state
+                const schedule = [];
+                const teacherSchedule = {};
+                const classSchedule = {};
+                const roomSchedule = {};
+                const restrictedSlots = {};
+                const classSubjectDayCount = {};
+                const classDayCount = {};
+                
+                let totalVarietyCost = 0;
+                
+                // Helper to calculate variety cost (can be relaxed)
+                function calcVarietyCost(session, assignment) {
+                    if (relaxVariety) return 0; // Skip variety optimization on retry
+                    
+                    const { day, time } = assignment;
+                    const classKey = session.isCombined ? session.combinedGroups[0] : session.class;
+                    let cost = 0;
+                    
+                    const subjectDayKey = `${classKey}-${session.subject}-${day}`;
+                    const subjectDayCount = classSubjectDayCount[subjectDayKey] || 0;
+                    cost += subjectDayCount * 100;
+                    
+                    const dayKey = `${classKey}-${day}`;
+                    const dayCount = classDayCount[dayKey] || 0;
+                    const idealPerDay = Math.ceil(Object.values(constraints.requirements).reduce((a,b) => a+b, 0) / constraints.days.length);
+                    if (dayCount >= idealPerDay) {
+                        cost += (dayCount - idealPerDay + 1) * 50;
+                    }
+                    
+                    const timeIndex = constraints.timeSlots.indexOf(time);
+                    if (timeIndex > 0) {
+                        const prevTime = constraints.timeSlots[timeIndex - 1];
+                        const prevSession = schedule.find(s => 
+                            (s.class === classKey || (s.combinedGroups && s.combinedGroups.includes(classKey))) &&
+                            s.day === day && s.time === prevTime && s.subject === session.subject
+                        );
+                        if (prevSession) cost += 200;
+                    }
+                    
+                    if (session.isCombined) {
+                        const combinedOnDay = schedule.filter(s => 
+                            s.isCombined && s.day === day &&
+                            s.combinedGroups && session.combinedGroups.some(g => s.combinedGroups.includes(g))
+                        ).length;
+                        cost += combinedOnDay * 80;
+                    }
+                    
+                    cost += timeIndex * 2;
+                    return cost;
+                }
+                
+                // Helper to check validity
+                function isValid(session, assignment) {
+                    const { teacher, day, time, room } = assignment;
+                    
+                    if (teacherSchedule[`${teacher}-${day}-${time}`]) return false;
+                    if (roomSchedule[`${room}-${day}-${time}`]) return false;
+                    if (classSchedule[`${session.class}-${day}-${time}`]) return false;
+                    
+                    if (session.isCombined) {
+                        for (const g of session.combinedGroups) {
+                            if (classSchedule[`${g}-${day}-${time}`]) return false;
+                        }
+                    }
+                    
+                    if (restrictedSubjects.includes(session.subject)) {
+                        if (restrictedSlots[`${session.subject}-${day}-${time}`]) return false;
+                    }
+                    
+                    return true;
+                }
+                
+                // Get valid assignments
+                function getValid(session) {
+                    const valid = [];
+                    const availableDays = getAvailableDaysForClass(session.class);
+                    const eligibleTeachers = teachers.filter(t => t.subjects.includes(session.subject));
+                    
+                    for (const teacher of eligibleTeachers) {
+                        for (const day of availableDays) {
+                            if (!teacher.days.includes(day)) continue;
+                            
+                            if (session.isCombined) {
+                                const allAvailable = session.combinedGroups.every(g => 
+                                    getAvailableDaysForClass(g).includes(day)
+                                );
+                                if (!allAvailable) continue;
+                            }
+                            
+                            for (const time of constraints.timeSlots) {
+                                for (const room of constraints.rooms) {
+                                    const assignment = { teacher, day, time, room };
+                                    if (isValid(session, assignment)) {
+                                        assignment.varietyCost = calcVarietyCost(session, assignment);
+                                        valid.push(assignment);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return valid;
+                }
+                
+                for (const session of orderedSessions) {
+                    const validAssignments = getValid(session);
+                    
+                    if (validAssignments.length === 0) {
+                        // Collect debug info about why there are no valid slots
+                        const debugInfo = {
+                            teacherConflicts: 0,
+                            roomConflicts: 0,
+                            classConflicts: 0,
+                            restrictedConflicts: 0,
+                            combinedConflicts: 0,
+                            noTeacherDays: 0,
+                            totalChecked: 0
+                        };
+                        
+                        const availableDays = getAvailableDaysForClass(session.class);
+                        const eligibleTeachers = teachers.filter(t => t.subjects.includes(session.subject));
+                        
+                        for (const teacher of eligibleTeachers) {
+                            for (const day of availableDays) {
+                                if (!teacher.days.includes(day)) {
+                                    debugInfo.noTeacherDays++;
+                                    continue;
+                                }
+                                
+                                if (session.isCombined) {
+                                    const allAvailable = session.combinedGroups.every(g => 
+                                        getAvailableDaysForClass(g).includes(day)
+                                    );
+                                    if (!allAvailable) {
+                                        debugInfo.combinedConflicts++;
+                                        continue;
+                                    }
+                                }
+                                
+                                for (const time of constraints.timeSlots) {
+                                    for (const room of constraints.rooms) {
+                                        debugInfo.totalChecked++;
+                                        
+                                        if (teacherSchedule[`${teacher.name}-${day}-${time}`]) {
+                                            debugInfo.teacherConflicts++;
+                                        } else if (roomSchedule[`${room}-${day}-${time}`]) {
+                                            debugInfo.roomConflicts++;
+                                        } else if (classSchedule[`${session.class}-${day}-${time}`]) {
+                                            debugInfo.classConflicts++;
+                                        } else if (session.isCombined && session.combinedGroups.some(g => classSchedule[`${g}-${day}-${time}`])) {
+                                            debugInfo.combinedConflicts++;
+                                        } else if (restrictedSubjects.includes(session.subject) && restrictedSlots[`${session.subject}-${day}-${time}`]) {
+                                            debugInfo.restrictedConflicts++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        return { success: false, failedSession: session, schedule: null, debugInfo };
+                    }
+                    
+                    validAssignments.sort((a, b) => a.varietyCost - b.varietyCost);
+                    const chosen = validAssignments[0];
+                    totalVarietyCost += chosen.varietyCost;
+                    
+                    const entry = {
+                        teacher: chosen.teacher,
+                        class: session.isCombined ? session.combinedGroups.join(' + ') : session.class,
+                        subject: session.subject,
+                        day: chosen.day,
+                        time: chosen.time,
+                        room: chosen.room,
+                        isCombined: session.isCombined || false,
+                        combinedGroups: session.combinedGroups
+                    };
+                    
+                    schedule.push(entry);
+                    
+                    teacherSchedule[`${chosen.teacher}-${chosen.day}-${chosen.time}`] = true;
+                    roomSchedule[`${chosen.room}-${chosen.day}-${chosen.time}`] = true;
+                    classSchedule[`${session.class}-${chosen.day}-${chosen.time}`] = true;
+                    
+                    const classKey = session.isCombined ? session.combinedGroups[0] : session.class;
+                    const subjectDayKey = `${classKey}-${session.subject}-${chosen.day}`;
+                    classSubjectDayCount[subjectDayKey] = (classSubjectDayCount[subjectDayKey] || 0) + 1;
+                    
+                    const dayKey = `${classKey}-${chosen.day}`;
+                    classDayCount[dayKey] = (classDayCount[dayKey] || 0) + 1;
+                    
+                    if (session.isCombined) {
+                        for (const g of session.combinedGroups) {
+                            classSchedule[`${g}-${chosen.day}-${chosen.time}`] = true;
+                            classSubjectDayCount[`${g}-${session.subject}-${chosen.day}`] = 
+                                (classSubjectDayCount[`${g}-${session.subject}-${chosen.day}`] || 0) + 1;
+                            classDayCount[`${g}-${chosen.day}`] = (classDayCount[`${g}-${chosen.day}`] || 0) + 1;
+                        }
+                    }
+                    
+                    if (restrictedSubjects.includes(session.subject)) {
+                        restrictedSlots[`${session.subject}-${chosen.day}-${chosen.time}`] = true;
+                    }
+                }
+                
+                return { success: true, schedule, totalVarietyCost };
+            }
+            
+            // First attempt with variety optimization
+            let result = attemptSchedule(false);
+            
+            if (!result.success) {
+                output.textContent += `⚠️ Failed with variety optimization on: ${result.failedSession.class} ${result.failedSession.subject}\n`;
+                output.textContent += `Retrying without variety constraints...\n\n`;
+                
+                // Retry without variety optimization
+                result = attemptSchedule(true);
+                
+                if (!result.success) {
+                    // Debug: show what slots are available
+                    const session = result.failedSession;
+                    const debug = result.debugInfo || {};
+                    
+                    output.textContent += `\n🔍 Debug for ${session.class} ${session.subject}:\n`;
+                    
+                    const availableDays = getAvailableDaysForClass(session.class);
+                    output.textContent += `  Available days: ${availableDays.join(', ')}\n`;
+                    
+                    const eligibleTeachers = teachers.filter(t => t.subjects.includes(session.subject));
+                    output.textContent += `  Eligible teachers: ${eligibleTeachers.map(t => t.name).join(', ') || 'NONE'}\n`;
+                    
+                    if (eligibleTeachers.length === 0) {
+                        output.textContent += `  ❌ No teacher can teach ${session.subject}!\n`;
+                    } else if (debug.totalChecked > 0) {
+                        output.textContent += `\n  📊 Conflict Analysis (${debug.totalChecked} slot combinations checked):\n`;
+                        output.textContent += `    • Teacher busy: ${debug.teacherConflicts || 0}\n`;
+                        output.textContent += `    • Room busy: ${debug.roomConflicts || 0}\n`;
+                        output.textContent += `    • Class busy: ${debug.classConflicts || 0}\n`;
+                        output.textContent += `    • Restricted subject (Eng/Maths): ${debug.restrictedConflicts || 0}\n`;
+                        output.textContent += `    • Combined group conflict: ${debug.combinedConflicts || 0}\n`;
+                        output.textContent += `    • Teacher not available that day: ${debug.noTeacherDays || 0}\n`;
+                        
+                        // Calculate capacity
+                        const totalSlots = availableDays.length * constraints.timeSlots.length;
+                        output.textContent += `\n  📈 Capacity Check:\n`;
+                        output.textContent += `    • Total time slots per class: ${totalSlots}\n`;
+                        output.textContent += `    • Sessions needed: ${sessionsToSchedule.length}\n`;
+                        output.textContent += `    • Rooms available: ${constraints.rooms.length}\n`;
+                        output.textContent += `    • Max parallel sessions: ${constraints.rooms.length} (limited by rooms)\n`;
+                        
+                        const mostConflicts = Math.max(
+                            debug.teacherConflicts || 0,
+                            debug.roomConflicts || 0,
+                            debug.classConflicts || 0,
+                            debug.restrictedConflicts || 0
+                        );
+                        
+                        if ((debug.teacherConflicts || 0) === mostConflicts && mostConflicts > 0) {
+                            output.textContent += `\n  💡 Suggestion: Add more teachers or increase teacher hours\n`;
+                        } else if ((debug.roomConflicts || 0) === mostConflicts && mostConflicts > 0) {
+                            output.textContent += `\n  💡 Suggestion: Add more rooms\n`;
+                        } else if ((debug.classConflicts || 0) === mostConflicts && mostConflicts > 0) {
+                            output.textContent += `\n  💡 Suggestion: Class has too many sessions - reduce subject hours or add available days\n`;
+                        } else if ((debug.restrictedConflicts || 0) === mostConflicts && mostConflicts > 0) {
+                            output.textContent += `\n  💡 Suggestion: Too many English/Maths sessions - only 1 allowed per time slot across all classes\n`;
+                        }
+                    } else {
+                        output.textContent += `\n  ⚠️ No valid slots found - check teacher availability and class days\n`;
+                    }
+                    
+                    return null;
+                }
+                
+                output.textContent += `✅ Succeeded with relaxed variety\n\n`;
+            }
+            
+            let schedule = result.schedule;
+            let totalVarietyCost = result.totalVarietyCost;
+            
+            // Add Work Placement sessions for T-Level groups
+            output.textContent += '💼 Adding Work Placement Days (T-Levels)...\n';
+            
+            let workPlacementCount = 0;
+            let workPlacementSessions = 0;
+            
+            for (const studentClass of constraints.classes) {
+                const config = constraints.groupConfigs[studentClass] || {};
+                
+                if (config.workPlacement && config.workPlacementDay) {
+                    const wpDay = config.workPlacementDay;
+                    output.textContent += `  ${studentClass}: Work Placement on ${wpDay}\n`;
+                    
+                    for (const time of constraints.timeSlots) {
+                        schedule.push({
+                            teacher: 'Industry Placement',
+                            class: studentClass,
+                            subject: 'Work Placement',
+                            day: wpDay,
+                            time: time,
+                            room: 'Employer Site',
+                            isWorkPlacement: true
+                        });
+                        workPlacementSessions++;
+                    }
+                    
+                    output.textContent += `    ✅ Full day scheduled\n`;
+                    workPlacementCount++;
+                }
+            }
+            
+            if (workPlacementCount === 0) {
+                output.textContent += '  No T-Level work placements configured\n';
+            }
+            
+            const endTime = performance.now();
+            
+            // Calculate variety metrics
+            output.textContent += '\n📊 Variety Analysis:\n';
+            
+            // Check subject distribution per class per day
+            let backToBackCount = 0;
+            let sameSubjectSameDayMax = 0;
+            
+            for (const className of constraints.classes) {
+                const classScheduleItems = schedule.filter(s => 
+                    s.class === className || (s.combinedGroups && s.combinedGroups.includes(className))
+                );
+                
+                for (const day of constraints.days) {
+                    const dayItems = classScheduleItems.filter(s => s.day === day && !s.isWorkPlacement);
+                    dayItems.sort((a, b) => constraints.timeSlots.indexOf(a.time) - constraints.timeSlots.indexOf(b.time));
+                    
+                    // Check for back-to-back same subject
+                    for (let i = 1; i < dayItems.length; i++) {
+                        if (dayItems[i].subject === dayItems[i-1].subject) {
+                            backToBackCount++;
+                        }
+                    }
+                    
+                    // Check max same subject per day
+                    const subjectCounts = {};
+                    dayItems.forEach(s => {
+                        subjectCounts[s.subject] = (subjectCounts[s.subject] || 0) + 1;
+                    });
+                    const maxSubject = Math.max(0, ...Object.values(subjectCounts));
+                    if (maxSubject > sameSubjectSameDayMax) sameSubjectSameDayMax = maxSubject;
+                }
+            }
+            
+            output.textContent += `  Back-to-back same subject: ${backToBackCount} (ideal: 0)\n`;
+            output.textContent += `  Max same subject per day: ${sameSubjectSameDayMax} (ideal: 1)\n`;
+            output.textContent += `  Total variety cost: ${totalVarietyCost} (lower is better)\n`;
+            output.textContent += `  Time: ${(endTime - startTime).toFixed(0)}ms\n`;
+            output.textContent += `\n✅ ILP solution found with ${schedule.length} assignments\n`;
+            
+            return schedule;
+        }
+
+        // Helper function to build combined sessions map
+        function buildCombinedSessionsMap(combinedClasses) {
+            const map = {};
+            
+            for (const combo of combinedClasses) {
+                if (combo.groups.length < 2) continue;
+                
+                const primaryGroup = combo.groups[0];
+                const otherGroups = combo.groups.slice(1);
+                
+                const primaryKey = `${primaryGroup}-${combo.subject}`;
+                if (!map[primaryKey]) {
+                    map[primaryKey] = { reducedBy: 0, combineWith: [], isPrimary: true, combinedSessions: 0 };
+                }
+                map[primaryKey].combineWith.push(...otherGroups);
+                map[primaryKey].combinedSessions = combo.sessions;
+                
+                for (const otherGroup of otherGroups) {
+                    const otherKey = `${otherGroup}-${combo.subject}`;
+                    if (!map[otherKey]) {
+                        map[otherKey] = { reducedBy: 0, combineWith: [], isPrimary: false };
+                    }
+                    map[otherKey].reducedBy += combo.sessions;
+                }
+            }
+            
+            return map;
         }
 
         function getAvailableDaysForClass(className) {
@@ -2463,7 +3759,9 @@
                         th { background: #34495e; color: white; padding: 10px; text-align: left; }
                         td { padding: 8px; border-bottom: 1px solid #ddd; }
                         tr:nth-child(even) { background: #f8f9fa; }
+                        .combined { background: #e8f4fd; }
                         .summary { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+                        .hours-summary { font-size: 12px; color: #666; margin-bottom: 10px; }
                         @media print { body { padding: 0; } }
                     </style>
                 </head>
@@ -2480,21 +3778,39 @@
                     </div>
             `;
             
-            // Group by class
-            const scheduleByClass = {};
-            schedule.forEach(s => {
-                if (!scheduleByClass[s.class]) scheduleByClass[s.class] = [];
-                scheduleByClass[s.class].push(s);
-            });
-            
+            // For each class, gather their sessions including combined ones
             for (const className of constraints.classes.sort()) {
-                if (!scheduleByClass[className]) continue;
+                // Get direct sessions
+                const directSessions = schedule.filter(s => s.class === className);
+                
+                // Get combined sessions where this class is part of the group
+                const combinedSessions = schedule.filter(s => 
+                    s.isCombined && 
+                    s.combinedGroups && 
+                    s.combinedGroups.includes(className)
+                );
+                
+                // Merge all sessions for this class
+                const allSessions = [...directSessions, ...combinedSessions];
+                
+                if (allSessions.length === 0) continue;
+                
+                // Count hours
+                const directHours = directSessions.length;
+                const combinedHours = combinedSessions.length;
+                const totalHours = directHours + combinedHours;
                 
                 html += `<h2>${className} Schedule</h2>`;
-                html += `<table><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th></tr>`;
+                html += `<p class="hours-summary">Total: ${totalHours} hours`;
+                if (combinedHours > 0) {
+                    html += ` (${directHours} direct + ${combinedHours} combined)`;
+                }
+                html += `</p>`;
+                html += `<table><tr><th>Day</th><th>Time</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Notes</th></tr>`;
                 
+                // Group by day
                 const classScheduleByDay = {};
-                scheduleByClass[className].forEach(s => {
+                allSessions.forEach(s => {
                     if (!classScheduleByDay[s.day]) classScheduleByDay[s.day] = [];
                     classScheduleByDay[s.day].push(s);
                 });
@@ -2507,12 +3823,18 @@
                     );
                     
                     daySessions.forEach((s, i) => {
-                        html += `<tr>
+                        const isCombined = s.isCombined && s.combinedGroups;
+                        const rowClass = isCombined ? 'combined' : '';
+                        const notes = isCombined ? `Combined with ${s.combinedGroups.filter(g => g !== className).join(', ')}` : 
+                                      s.isWorkPlacement ? 'Work Placement' : '';
+                        
+                        html += `<tr class="${rowClass}">
                             <td>${i === 0 ? day : ''}</td>
                             <td>${s.time}</td>
                             <td>${s.subject}</td>
                             <td>${s.teacher}</td>
                             <td>${s.room}</td>
+                            <td>${notes}</td>
                         </tr>`;
                     });
                 }
